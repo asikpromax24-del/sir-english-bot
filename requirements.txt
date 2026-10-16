@@ -3,3 +3,4 @@ torch
 transformers
 peft
 accelerate
+gdown
