@@ -12,7 +12,7 @@ groq_client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
 # Gemini Model for Files
-gemini_model = genai.GenerativeModel('gemini-2.5-flash')
+gemini_model = genai.GenerativeModel('gemini-3.8-flash')
 # Chat History
 if "messages" not in st.session_state:
     st.session_state.messages = []
