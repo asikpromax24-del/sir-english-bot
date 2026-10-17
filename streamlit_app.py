@@ -18,35 +18,25 @@ st.set_page_config(page_title="Super AI Pro", page_icon="🧠", layout="wide", i
 
 custom_css = """
 <style>
-    /* Streamlit ডিফল্ট মেনু হাইড করা */
     #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
-    
-    /* ব্যাকগ্রাউন্ড ডার্ক করা */
     .stApp { background-color: #0E1117; color: #FAFAFA !important; }
-    .stChatFloatingInputContainer { background-color: #0E1117; }
     
-    /* চ্যাট মেসেজ বক্স ডার্ক করা এবং লেখা সাদা করা */
+    /* চ্যাট মেসেজ বক্স */
     div[data-testid="stChatMessage"] { 
         background-color: #1E232B; border-radius: 10px; padding: 15px; margin-bottom: 10px; color: #FAFAFA !important;
     }
-    
-    /* চ্যাটের ভেতরের সব লেখা সাদা করা */
     div[data-testid="stChatMessage"] p, div[data-testid="stChatMessage"] li, div[data-testid="stChatMessage"] span,
     div[data-testid="stChatMessage"] h1, div[data-testid="stChatMessage"] h2, div[data-testid="stChatMessage"] h3 { 
         color: #FAFAFA !important; 
     }
-    
-    /* টেবিল ফিক্স */
     div[data-testid="stChatMessage"] table { border-collapse: collapse; width: 100%; margin: 10px 0; }
     div[data-testid="stChatMessage"] th, div[data-testid="stChatMessage"] td { color: #FAFAFA !important; border: 1px solid #555 !important; padding: 8px; }
     
-    /* CHAT INPUT BOX FIX */
+    /* ইনপুট বক্স ফিক্স */
     div[data-testid="stChatInput"] { background-color: #1E232B !important; border-radius: 10px; }
     div[data-testid="stChatInput"] > div { background-color: #1E232B !important; border: 1px solid #444 !important; border-radius: 10px; }
     div[data-testid="stChatInput"] textarea { color: #FAFAFA !important; background-color: transparent !important; }
     div[data-testid="stChatInput"] textarea::placeholder { color: #888 !important; }
-    
-    /* সেন্ড বাটন ফিক্স */
     div[data-testid="stChatInput"] button { background-color: #2B313A !important; border-radius: 5px !important; }
     div[data-testid="stChatInput"] button svg { fill: #FAFAFA !important; }
 </style>
@@ -57,7 +47,33 @@ st.markdown(custom_css, unsafe_allow_html=True)
 groq_client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
-# অডিও জেনারেটর
+# ================= ডেটাবেস সেটআপ (চ্যাট সেভের জন্য) =================
+def init_db():
+    conn = sqlite3.connect('super_ai.db')
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS chats (session_name TEXT, messages TEXT)''')
+    conn.commit()
+    return conn
+
+conn = init_db()
+
+def save_chat(session_name, messages):
+    c = conn.cursor()
+    messages_json = json.dumps(messages)
+    c.execute("DELETE FROM chats WHERE session_name=?", (session_name,))
+    c.execute("INSERT INTO chats (session_name, messages) VALUES (?, ?)", (session_name, messages_json))
+    conn.commit()
+
+def load_chats():
+    c = conn.cursor()
+    c.execute("SELECT session_name, messages FROM chats")
+    rows = c.fetchall()
+    sessions = {}
+    for row in rows:
+        sessions[row[0]] = json.loads(row[1])
+    return sessions if sessions else {"Chat 1": []}
+
+# ================= অডিও জেনারেটর =================
 def generate_audio_edge(text, speed="+0%"):
     try:
         lang = detect(text)
@@ -77,12 +93,30 @@ def generate_audio_edge(text, speed="+0%"):
         return io.BytesIO(loop.run_until_complete(_generate()))
     except: return None
 
-# ================= মেইন অ্যাপ =================
+# ================= লাইভ টাইপিং ফাংশন =================
+def stream_groq_response(chat_history):
+    stream = groq_client.chat.completions.create(
+        model="openai/gpt-oss-120b",
+        messages=chat_history,
+        temperature=0.7,
+        max_tokens=1500,
+        stream=True
+    )
+    for chunk in stream:
+        if chunk.choices[0].delta.content:
+            yield chunk.choices[0].delta.content
 
+# ================= মেইন অ্যাপ =================
 st.title("🧠 Super AI Pro")
 
-# মেইন স্ক্রিনে সেটিংস ও টুলস (সাইডবারের বদলে)
-with st.expander("⚙️ Settings & Tools (Click to Open)", expanded=False):
+# সেশন ম্যানেজমেন্ট
+if "chat_sessions" not in st.session_state:
+    st.session_state.chat_sessions = load_chats()
+if "current_session" not in st.session_state:
+    st.session_state.current_session = list(st.session_state.chat_sessions.keys())[0]
+
+# সেটিংস ও টুলস
+with st.expander("⚙️ Settings & Tools", expanded=False):
     col1, col2 = st.columns(2)
     with col1:
         mode = st.selectbox("Choose Tool", ["💬 Chat & Analyze", "🎨 Image Generator", "📊 Data Visualization"])
@@ -92,17 +126,37 @@ with st.expander("⚙️ Settings & Tools (Click to Open)", expanded=False):
         persona_prompt = persona_prompts[persona_choice]
     
     auto_search = st.checkbox("🌐 Enable Auto Web Search")
-    enable_voice = st.checkbox("🔊 Enable Voice Output", value=True)
+    enable_voice = st.checkbox("🔊 Enable Auto Voice Output", value=True)
     voice_speed = st.select_slider("Voice Speed", options=["-50%", "-25%", "+0%", "+25%", "+50%"], value="+0%")
 
-# চ্যাট সেশন ম্যানেজমেন্ট (মেইন স্ক্রিনে)
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+# চ্যাট সেশন ম্যানেজার
+with st.expander("🗂️ Chat Sessions", expanded=False):
+    session_list = list(st.session_state.chat_sessions.keys())
+    selected_session = st.selectbox("Select Chat", session_list, index=session_list.index(st.session_state.current_session))
+    
+    colA, colB = st.columns(2)
+    with colA:
+        if st.button("➕ New Chat"):
+            new_chat_id = f"Chat {len(st.session_state.chat_sessions) + 1}"
+            st.session_state.chat_sessions[new_chat_id] = []
+            st.session_state.current_session = new_chat_id
+            st.rerun()
+    with colB:
+        if st.button("🗑️ Clear Chat"):
+            st.session_state.chat_sessions[st.session_state.current_session] = []
+            save_chat(st.session_state.current_session, [])
+            st.rerun()
+            
+    if selected_session != st.session_state.current_session:
+        st.session_state.current_session = selected_session
+        st.rerun()
 
 # ================= অ্যাপ লজিক =================
+current_messages = st.session_state.chat_sessions[st.session_state.current_session]
 
 if mode == "💬 Chat & Analyze":
-    for message in st.session_state.messages:
+    # চ্যাট হিস্ট্রি রেন্ডার
+    for message in current_messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
@@ -120,32 +174,47 @@ if mode == "💬 Chat & Analyze":
                 with open("temp_audio.wav", "rb") as f:
                     user_text = groq_client.audio.transcriptions.create(file=("temp_audio.wav", f.read()), model="whisper-large-v3").text
 
-        st.session_state.messages.append({"role": "user", "content": user_text})
+        current_messages.append({"role": "user", "content": user_text})
+        save_chat(st.session_state.current_session, current_messages)
+        
         with st.chat_message("user"): st.markdown(user_text)
 
         with st.chat_message("assistant"):
-            with st.spinner("Thinking..."):
-                try:
-                    if uploaded_file:
+            if uploaded_file:
+                # ইমেজ ভিশন (Gemini)
+                with st.spinner("Analyzing file..."):
+                    try:
                         gemini_model = genai.GenerativeModel('gemini-3.8-flash')
                         response = gemini_model.generate_content([user_text, {"mime_type": uploaded_file.type, "data": uploaded_file.getvalue()}])
                         answer = response.text
-                    else:
-                        context = ""
-                        if auto_search:
-                            results = list(DDGS().text(user_text, max_results=3))
-                            if results: context = "\n".join([f"Snippet: {r['body']}" for r in results])
+                        st.markdown(answer)
+                        current_messages.append({"role": "assistant", "content": answer})
+                        save_chat(st.session_state.current_session, current_messages)
                         
-                        final_prompt = persona_prompt + context + "\n\nIMPORTANT: Reply in clear text. Use standard Markdown tables. Reply in the user's language."
-                        chat_history = [{"role": "system", "content": final_prompt}] + [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages[-20:]]
-                        answer = groq_client.chat.completions.create(model="openai/gpt-oss-120b", messages=chat_history, temperature=0.7, max_tokens=1500).choices[0].message.content
+                        if enable_voice:
+                            audio_data = generate_audio_edge(answer, voice_speed)
+                            if audio_data: st.audio(audio_data, format="audio/mp3", autoplay=True)
+                    except Exception as e: st.error(f"Error: {str(e)}")
+            else:
+                # লাইভ টাইপিং (Groq)
+                try:
+                    context = ""
+                    if auto_search:
+                        results = list(DDGS().text(user_text, max_results=3))
+                        if results: context = "\n".join([f"Snippet: {r['body']}" for r in results])
                     
-                    st.markdown(answer)
-                    st.session_state.messages.append({"role": "assistant", "content": answer})
+                    final_prompt = persona_prompt + context + "\n\nIMPORTANT: Reply in clear text. Use standard Markdown tables. Reply in the user's language."
+                    chat_history = [{"role": "system", "content": final_prompt}] + [{"role": m["role"], "content": m["content"]} for m in current_messages[-20:]]
+                    
+                    # st.write_stream দিয়ে লাইভ টাইপিং দেখানো
+                    answer = st.write_stream(stream_groq_response(chat_history))
+                    
+                    current_messages.append({"role": "assistant", "content": answer})
+                    save_chat(st.session_state.current_session, current_messages)
                     
                     if enable_voice:
                         audio_data = generate_audio_edge(answer, voice_speed)
-                        if audio_data: st.audio(audio_data, format="audio/mp3")
+                        if audio_data: st.audio(audio_data, format="audio/mp3", autoplay=True)
                 except Exception as e: st.error(f"Error: {str(e)}")
 
 elif mode == "🎨 Image Generator":
