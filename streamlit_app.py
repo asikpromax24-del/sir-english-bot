@@ -13,12 +13,16 @@ import re
 import sqlite3
 import json
 
-# ================= ১. পেজ কনফিগারেশন ও ডার্ক থিম =================
+# ================= ১. পেজ কনফিগারেশন ও ডার্ক থিম ফিক্স =================
 st.set_page_config(page_title="Super AI & Sir English", page_icon="🧠", layout="wide", initial_sidebar_state="expanded")
 
+# নতুন এবং নিখুঁত CSS (সব লেখা ও বাটন দৃশ্যমান)
 custom_css = """
 <style>
-    #MainMenu {visibility: hidden;} footer {visibility: hidden;} 
+    #MainMenu {visibility: hidden;} 
+    footer {visibility: hidden;} 
+    header[data-testid="stHeader"] { background-color: transparent !important; }
+    
     .stApp { background-color: #0E1117; color: #FAFAFA !important; }
     
     /* চ্যাট মেসেজ ডিজাইন */
@@ -41,8 +45,39 @@ custom_css = """
     div[data-testid="stChatInput"] button { background-color: #2B313A !important; border-radius: 5px !important; }
     div[data-testid="stChatInput"] button svg { fill: #FAFAFA !important; }
     
+    /* ================= লগইন এবং ইনপুট বক্স ফিক্স ================= */
+    div[data-testid="stTextInput"] input, 
+    div[data-testid="stTextArea"] textarea {
+        color: #FAFAFA !important; /* লেখা সাদা */
+        background-color: #1E232B !important; /* ব্যাকগ্রাউন্ড ডার্ক */
+        border: 1px solid #555 !important;
+    }
+    div[data-testid="stTextInput"] label, 
+    div[data-testid="stTextArea"] label,
+    div[data-testid="stSelectbox"] label {
+        color: #FAFAFA !important;
+    }
+    
+    /* ================= বাটন ফিক্স ================= */
+    .stButton > button {
+        color: #FAFAFA !important; 
+        background-color: #2B313A !important; 
+        border: 1px solid #555 !important;
+        width: 100%;
+    }
+    .stButton > button:hover {
+        background-color: #444 !important;
+        border: 1px solid #FAFAFA !important;
+    }
+    
     /* সাইডবার স্টাইল */
     section[data-testid="stSidebar"] { background-color: #0E1117; border-right: 1px solid #333; }
+    section[data-testid="stSidebar"] p, section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] h2, section[data-testid="stSidebar"] h3 {
+        color: #FAFAFA !important;
+    }
+    
+    /* এক্সপ্যান্ডার ফিক্স */
+    .streamlit-expanderHeader { color: #FAFAFA !important; }
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
@@ -110,7 +145,7 @@ if not st.session_state.logged_in:
     st.markdown("Please log in to continue.")
     user = st.text_input("Username (e.g., admin)")
     pwd = st.text_input("Password (Demo: **admin123**)", type="password")
-    if st.button("Login", use_container_width=True):
+    if st.button("Login"):
         if user and pwd == "admin123":
             st.session_state.logged_in = True
             st.session_state.username = user
@@ -121,7 +156,7 @@ if not st.session_state.logged_in:
 # ================= ৫. সাইডবার ও নেভিগেশন =================
 st.sidebar.title("🧠 Navigation")
 st.sidebar.success(f"User: {st.session_state.username}")
-if st.sidebar.button("Logout", use_container_width=True):
+if st.sidebar.button("Logout"):
     st.session_state.logged_in = False
     st.rerun()
 
@@ -134,7 +169,7 @@ if "chat_sessions" not in st.session_state:
 if "current_session" not in st.session_state:
     st.session_state.current_session = list(st.session_state.chat_sessions.keys())[0]
 
-if st.sidebar.button("➕ New Chat Session", use_container_width=True):
+if st.sidebar.button("➕ New Chat Session"):
     new_chat_id = f"Chat {len(st.session_state.chat_sessions) + 1}"
     st.session_state.chat_sessions[new_chat_id] = []
     st.session_state.current_session = new_chat_id
@@ -160,7 +195,7 @@ else:
 enable_voice = st.sidebar.checkbox("🔊 Enable Auto Voice Output", value=True)
 voice_speed = st.sidebar.select_slider("Voice Speed", options=["-50%", "-25%", "+0%", "+25%", "+50%"], value="+0%")
 
-if st.sidebar.button("🗑️ Clear Current Chat", use_container_width=True):
+if st.sidebar.button("🗑️ Clear Current Chat"):
     st.session_state.chat_sessions[st.session_state.current_session] = []
     save_chat(st.session_state.username, st.session_state.current_session, [])
     st.rerun()
