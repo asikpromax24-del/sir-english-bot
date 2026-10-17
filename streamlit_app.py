@@ -89,7 +89,8 @@ session_list = list(st.session_state.chat_sessions.keys())
 st.session_state.current_session = st.sidebar.selectbox("Select Chat History", session_list, index=session_list.index(st.session_state.current_session))
 current_messages = st.session_state.chat_sessions[st.session_state.current_session]
 
-mode = st.sidebar.radio("Choose a Tool:", ["💬 Chat & Analyze", "🎨 Image Generator", "📺 YouTube Summarizer", "📊 Data Visualization"])
+# মোড সিলেকশন (ইউটিউব বাদ দেওয়া হলো)
+mode = st.sidebar.radio("Choose a Tool:", ["💬 Chat & Analyze", "🎨 Image Generator", "📊 Data Visualization"])
 
 # সেটিংস
 st.sidebar.markdown("---")
@@ -111,7 +112,7 @@ if mode == "💬 Chat & Analyze":
                 with st.expander("📋 Copy"):
                     st.code(message["content"], language="text")
 
-    with st.expander("📁 Upload File (PDF, Image, CSV)"):
+    with st.expander("📁 Upload File (PDF, Image)"):
         uploaded_file = st.file_uploader("Upload PDF or Image", type=["pdf", "png", "jpg", "jpeg"])
         audio_value = st.audio_input("Record a voice message")
 
@@ -151,131 +152,40 @@ if mode == "💬 Chat & Analyze":
                         if audio_data: st.audio(audio_data, format="audio/mp3")
                 except Exception as e: st.error(f"Error: {str(e)}")
 
-# ২. ইউটিউব সামারাইজার
-elif mode == "📺 YouTube Summarizer":
-    st.title("📺 YouTube Video Summarizer")
-    st.write("Enter a YouTube link, and I will summarize or explain the video for you.")
+# ২. ডেটা ভিজুয়ালাইজেশন (CSV)
+elif mode == "📊 Data Visualization":
+    st.title("📊 AI Data Visualization")
+    st.write("Upload a CSV file, and ask me to draw a chart.")
+    csv_file = st.file_uploader("Upload CSV", type=["csv"])
     
-    yt_url = st.text_input("YouTube Video URL:")
-    
-    # ইউজার নিজে লিখবে সে কী চায় (বাংলা, ইংরেজি বা অন্য যেকোনো ভাষায়)
-    yt_prompt = st.text_input(
-        "What do you want me to do with this video?", 
-        value="Summarize this video clearly in English."
-    )
-    
-    if st.button("Process Video"):
-        if yt_url:
-            with st.spinner("Fetching transcript and processing..."):
-                try:
-                    # ভিডিও আইডি বের করা
-                    video_id = re.search(r'(?:v=|\/)([0-9A-Za-z_-]{11}).*', yt_url).group(1)
-                    
+    if csv_file:
+        df = pd.read_csv(csv_file)
+        st.write("### Data Preview:", df.head())
+        
+        chart_prompt = st.text_input("What kind of chart do you want? (e.g., 'Draw a bar chart of Sales by Region')")
+        
+        if st.button("Generate Chart"):
+            if chart_prompt:
+                with st.spinner("Generating Chart..."):
                     try:
-                        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-                        try:
-                            transcript = transcript_list.find_transcript(['en', 'bn', 'hi'])
-                        except:
-                            transcript = list(transcript_list)[0]
+                        sys_prompt = f"You are a Python data analyst. The user has a pandas DataFrame named 'df' with columns: {list(df.columns)}. Write ONLY the python code using 'plotly.express as px' to plot what the user asked. The final figure must be stored in a variable named 'fig'. Do not include any markdown formatting, just the pure python code."
+                        user_prompt = f"User request: {chart_prompt}"
                         
-                        transcript_data = transcript.fetch()
-                        transcript_text = " ".join([t['text'] for t in transcript_data])
+                        response = groq_client.chat.completions.create(
+                            model="openai/gpt-oss-120b",
+                            messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": user_prompt}],
+                            temperature=0.1
+                        )
+                        code = response.choices[0].message.content.replace("```python", "").replace("```", "").strip()
+                        
+                        local_vars = {'df': df, 'px': px}
+                        exec(code, globals(), local_vars)
+                        fig = local_vars['fig']
+                        st.plotly_chart(fig, use_container_width=True)
                     except Exception as e:
-                        st.error("Sorry! This video either has no subtitles or YouTube blocked the request. Please try another video.")
-                        st.stop()
-                    
-                    # এআই-কে ইউজারের চাহিদা অনুযায়ী উত্তর দিতে বলা
-                    prompt = f"User Instruction: {yt_prompt}\n\nYouTube Video Transcript:\n{transcript_text[:15000]}" 
-                    response = groq_client.chat.completions.create(
-                        model="openai/gpt-oss-120b",
-                        messages=[{"role": "user", "content": prompt}],
-                        temperature=0.5, max_tokens=1500
-                    )
-                    summary = response.choices[0].message.content
-                    st.markdown("### 📝 Result:")
-                    st.markdown(summary)
-                    
-                    if enable_voice:
-                        audio_data = generate_audio_edge(summary)
-                        if audio_data: st.audio(audio_data, format="audio/mp3")
-                except Exception as e:
-                    st.error(f"An error occurred: {str(e)}")
-# ৩. ডেটা ভিজুয়ালাইজেশন (CSV)
-elif mode == "📺 YouTube Summarizer":
-    st.title("📺 YouTube Video Summarizer")
-    st.write("Enter a YouTube link, and I will summarize or explain the video for you.")
-    
-    yt_url = st.text_input("YouTube Video URL:")
-    yt_prompt = st.text_input("What do you want me to do?", value="Summarize this video clearly in English.")
-    
-    if st.button("Process Video"):
-        if yt_url:
-            with st.spinner("Fetching transcript... (This may take a moment)"):
-                try:
-                    import yt_dlp
-                    
-                    # yt-dlp কনফিগারেশন
-                    ydl_opts = {
-                        'skip_download': True,
-                        'writesubtitles': True,
-                        'writeautomaticsub': True,
-                        'subtitleslangs': ['en', 'bn', 'hi'],
-                        'quiet': True,
-                    }
-                    
-                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                        info = ydl.extract_info(yt_url, download=False)
-                        
-                        # সাবটাইটেল খোঁজা
-                        subtitles = info.get('subtitles', {})
-                        automatic_captions = info.get('automatic_captions', {})
-                        
-                        sub_url = None
-                        # প্রথমে ম্যানুয়াল সাবটাইটেল, তারপর অটো-জেনারেটেড
-                        for lang in ['en', 'bn', 'hi']:
-                            if lang in subtitles:
-                                sub_url = subtitles[lang][0]['url']
-                                break
-                            elif lang in automatic_captions:
-                                sub_url = automatic_captions[lang][0]['url']
-                                break
-                        
-                        if not sub_url:
-                            st.error("দুঃখিত! এই ভিডিওতে কোনো সাবটাইটেল পাওয়া যায়নি।")
-                            st.stop()
-                            
-                        # সাবটাইটেল ডাউনলোড ও টেক্সট এক্সট্রাক্ট করা
-                        import requests
-                        sub_response = requests.get(sub_url)
-                        transcript_text = sub_response.text
-                        
-                        # WebVTT ফরম্যাট পরিষ্কার করা
-                        import re
-                        lines = []
-                        for line in transcript_text.split('\n'):
-                            if '-->' not in line and not line.strip().isdigit() and line.strip() != 'WEBVTT' and line.strip() != '':
-                                clean_line = re.sub(r'<[^>]+>', '', line).strip()
-                                if clean_line:
-                                    lines.append(clean_line)
-                        final_transcript = " ".join(lines)
+                        st.error(f"চার্ট তৈরিতে সমস্যা হচ্ছে: {str(e)}")
 
-                    # এআই দিয়ে সামারাইজ
-                    prompt = f"User Instruction: {yt_prompt}\n\nYouTube Video Transcript:\n{final_transcript[:15000]}" 
-                    response = groq_client.chat.completions.create(
-                        model="openai/gpt-oss-120b",
-                        messages=[{"role": "user", "content": prompt}],
-                        temperature=0.5, max_tokens=1500
-                    )
-                    summary = response.choices[0].message.content
-                    st.markdown("### 📝 Result:")
-                    st.markdown(summary)
-                    
-                    if enable_voice:
-                        audio_data = generate_audio_edge(summary)
-                        if audio_data: st.audio(audio_data, format="audio/mp3")
-                except Exception as e:
-                    st.error(f"একটি সমস্যা হয়েছে। সম্ভবত ভিডিওটিতে সাবটাইটেল নেই অথবা লিংকটি সঠিক নয়। বিস্তারিত: {str(e)}")
-# ৪. ইমেজ জেনারেটর
+# ৩. ইমেজ জেনারেটর
 elif mode == "🎨 Image Generator":
     st.title("🎨 AI Image Generator")
     img_prompt = st.text_input("Image Prompt:")
