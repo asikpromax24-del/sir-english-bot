@@ -1,7 +1,7 @@
 import streamlit as st
 from groq import Groq
 import google.generativeai as genai
-from duckduckgo_search import DDGS
+from ddgs import DDGS
 import urllib.parse
 import streamlit.components.v1 as components
 
