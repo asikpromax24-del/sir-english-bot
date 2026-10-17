@@ -3,5 +3,5 @@ torch
 transformers
 peft
 accelerate
-gdown
+gdown==4.7.0
 bitsandbytes
