@@ -121,15 +121,22 @@ elif mode == "🌐 Web Search":
                 try:
                     from ddgs import DDGS
                     
-                    # ১. প্রথমে এআই-কে দিয়ে বাংলা প্রশ্নটাকে ইংরেজি সার্চ কি-ওয়ার্ডে অনুবাদ করানো হচ্ছে
-                    opt_prompt = f"Extract the best English search engine keywords from this query. Output ONLY the keywords, nothing else.\nQuery: {search_query}"
+                    # ১. এআই-কে দিয়ে বাংলা প্রশ্নটাকে ইংরেজি সার্চ কি-ওয়ার্ডে অনুবাদ করানো
+                    opt_prompt = f"Translate the following query into English search engine keywords. Output ONLY the keywords, nothing else.\nQuery: {search_query}"
                     opt_response = groq_client.chat.completions.create(
                         model="openai/gpt-oss-120b",
                         messages=[{"role": "user", "content": opt_prompt}],
                         temperature=0.1,
                         max_tokens=50
                     )
-                    optimized_query = opt_response.choices[0].message.content.strip()
+                    
+                    optimized_query = opt_response.choices[0].message.content
+                    
+                    # চেক করা হচ্ছে অনুবাদ টেক্সটটা খালি কি না
+                    if not optimized_query or not optimized_query.strip():
+                        optimized_query = search_query
+                    else:
+                        optimized_query = optimized_query.strip()
                     
                     # ২. ইংরেজি কি-ওয়ার্ড দিয়ে DuckDuckGo সার্চ
                     ddgs = DDGS()
