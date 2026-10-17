@@ -31,7 +31,7 @@ if prompt := st.chat_input("Ask me anything..."):
             chat_history = [system_prompt] + [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages[-5:]]
             
             response = client.chat.completions.create(
-                model="llama-3.3-70b-versatile", # দুনিয়ার সেরা ফ্রি মডেলগুলোর একটি
+                model="openai/gpt-oss-120b", # দুনিয়ার সেরা ফ্রি মডেলগুলোর একটি
                 messages=chat_history,
                 temperature=0.5,
                 max_tokens=500
