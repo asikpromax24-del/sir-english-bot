@@ -16,7 +16,6 @@ import json
 # ================= ১. পেজ কনফিগারেশন ও ডার্ক থিম ফিক্স =================
 st.set_page_config(page_title="Super AI & Sir English", page_icon="🧠", layout="wide", initial_sidebar_state="expanded")
 
-# নতুন এবং নিখুঁত CSS (সব লেখা ও বাটন দৃশ্যমান)
 custom_css = """
 <style>
     #MainMenu {visibility: hidden;} 
@@ -282,7 +281,8 @@ elif tool in ["💬 Chat & Analyze", "💬 Chat with Teacher", "🎤 Spoken Prac
             if uploaded_file:
                 with st.spinner("Analyzing file..."):
                     try:
-                        gemini_model = genai.GenerativeModel('gemini-3.8-flash')
+                        # ভিশন মডেলের নাম ঠিক করা হয়েছে
+                        gemini_model = genai.GenerativeModel('gemini-1.5-flash')
                         response = gemini_model.generate_content([user_text, {"mime_type": uploaded_file.type, "data": uploaded_file.getvalue()}])
                         answer = response.text
                         st.markdown(answer)
