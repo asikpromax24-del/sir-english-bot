@@ -4,3 +4,4 @@ google-generativeai
 ddgs
 requests
 edge-tts
+langdetect
