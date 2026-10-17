@@ -45,7 +45,7 @@ def generate_audio_edge(text):
         asyncio.set_event_loop(loop)
         audio_bytes = loop.run_until_complete(_generate())
         return io.BytesIO(audio_bytes)
-    except Exception as e:
+    except:
         return None
 
 # বাংলা থেকে ইংরেজি অনুবাদ করার ফাংশন (ছবি তৈরির জন্য)
@@ -58,15 +58,50 @@ def translate_to_english(text):
     except:
         return text
 
-# Sidebar Menu
+# লাইভ টাইপিং (Streaming) রেসপন্স জেনারেটর
+def stream_groq_response(chat_history):
+    stream = groq_client.chat.completions.create(
+        model="openai/gpt-oss-120b",
+        messages=chat_history,
+        temperature=0.7,
+        max_tokens=1500,
+        stream=True
+    )
+    for chunk in stream:
+        if chunk.choices[0].delta.content:
+            yield chunk.choices[0].delta.content
+
+# ---------------- Sidebar Menu ----------------
 st.sidebar.title("🧠 Super AI Modes")
 mode = st.sidebar.radio("Choose a mode:", ["💬 Chat & Analyze", "🎨 Generate Image", "🌐 Web Search"])
 
+st.sidebar.markdown("---")
+st.sidebar.subheader("⚙️ Settings")
+
+# পার্সোনা সিলেক্টর (ChatGPT-র কাস্টম ইনস্ট্রাকশনের মতো)
+persona_choice = st.sidebar.selectbox(
+    "Select AI Persona",
+    ["General Assistant", "Strict English Teacher", "Expert Python Coder", "Story Writer"]
+)
+persona_prompts = {
+    "General Assistant": "You are a super intelligent AI assistant. Answer accurately.",
+    "Strict English Teacher": "You are a strict English teacher. Correct the user's grammar, explain rules in Bengali if needed, and provide examples.",
+    "Expert Python Coder": "You are a senior Python developer. Write clean, efficient code with explanations.",
+    "Story Writer": "You are a creative storyteller. Write engaging and descriptive stories."
+}
+
+# ভয়েস অন/অফ টগল
+enable_voice = st.sidebar.checkbox("🔊 Enable Voice Output", value=True)
+
+# চ্যাট ক্লিয়ার বাটন
+if st.sidebar.button("🗑️ Clear Chat History"):
+    st.session_state.messages = []
+    st.rerun()
+
+# চ্যাট হিস্ট্রি ডাউনলোড
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# চ্যাট হিস্ট্রি ডাউনলোড বাটন
-st.sidebar.markdown("---")
 if st.session_state.messages:
     chat_text = "\n\n".join([f"{m['role'].upper()}: {m['content']}" for m in st.session_state.messages])
     st.sidebar.download_button(
@@ -76,22 +111,29 @@ if st.session_state.messages:
         mime="text/plain"
     )
 
+# ---------------- Main App Logic ----------------
 if mode == "💬 Chat & Analyze":
     st.title("💬 Chat, Voice & File Analysis")
     
-    # পুরো চ্যাট হিস্ট্রি রেন্ডার করা
+    # পুরো চ্যাট হিস্ট্রি রেন্ডার
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
-            # কপি বাটন যোগ করা হলো
-            with st.expander("📋 Copy Response"):
-                st.code(message["content"], language="text")
+            if message["role"] == "assistant":
+                with st.expander("📋 Copy Response"):
+                    st.code(message["content"], language="text")
 
     with st.expander("📁 Upload File or 🎤 Record Voice"):
         uploaded_file = st.file_uploader("Upload PDF or Image", type=["pdf", "png", "jpg", "jpeg"])
         audio_value = st.audio_input("Record a voice message")
 
     prompt = st.chat_input("Type your prompt here...")
+
+    # রিজেনারেট করার বাটন (শুধু আগের মেসেজ থাকলে দেখাবে)
+    if len(st.session_state.messages) > 0 and prompt is None and not audio_value:
+        if st.button("🔄 Regenerate Last Response"):
+            st.session_state.messages.pop() # শেষ উত্তরটা মুছে ফেলবে
+            st.rerun()
 
     if prompt or audio_value:
         user_text = prompt
@@ -114,45 +156,45 @@ if mode == "💬 Chat & Analyze":
         st.session_state.messages.append({"role": "user", "content": user_text})
         with st.chat_message("user"):
             st.markdown(user_text)
-            with st.expander("📋 Copy Response"):
-                st.code(user_text, language="text")
 
         with st.chat_message("assistant"):
-            with st.spinner("Thinking..."):
-                try:
-                    if uploaded_file:
+            # ফাইল থাকলে Gemini, না থাকলে Groq
+            if uploaded_file:
+                with st.spinner("Analyzing file..."):
+                    try:
                         gemini_model = genai.GenerativeModel('gemini-3.8-flash')
                         file_bytes = uploaded_file.getvalue()
                         mime_type = uploaded_file.type
-                        
                         response = gemini_model.generate_content([
                             user_text,
                             {"mime_type": mime_type, "data": file_bytes}
                         ])
                         answer = response.text
-                    else:
-                        # মেমোরি বাড়ানো হলো: [-10:] থেকে [-20:] করা হলো
-                        chat_history = [{"role": "system", "content": "You are a super intelligent AI assistant. You teach, write code, translate, and answer everything accurately in the language the user uses."}] + [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages[-20:]]
-                        response = groq_client.chat.completions.create(
-                            model="openai/gpt-oss-120b",
-                            messages=chat_history,
-                            temperature=0.7,
-                            max_tokens=1500
-                        )
-                        answer = response.choices[0].message.content
+                        st.markdown(answer)
+                        st.session_state.messages.append({"role": "assistant", "content": answer})
+                        with st.expander("📋 Copy Response"):
+                            st.code(answer, language="text")
+                        
+                        if enable_voice:
+                            audio_data = generate_audio_edge(answer)
+                            if audio_data: st.audio(audio_data, format="audio/mp3")
+                    except Exception as e:
+                        st.error(f"Error: {str(e)}")
+            else:
+                # লাইভ টাইপিং (Streaming) রেসপন্স
+                try:
+                    chat_history = [{"role": "system", "content": persona_prompts[persona_choice]}] + [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages[-20:]]
                     
-                    st.markdown(answer)
+                    # st.write_stream দিয়ে লাইভ টাইপিং দেখানো হচ্ছে
+                    answer = st.write_stream(stream_groq_response(chat_history))
                     
-                    # কপি বাটন যোগ করা হলো
+                    st.session_state.messages.append({"role": "assistant", "content": answer})
                     with st.expander("📋 Copy Response"):
                         st.code(answer, language="text")
-
-                    # অডিও জেনারেট করা
-                    audio_data = generate_audio_edge(answer)
-                    if audio_data:
-                        st.audio(audio_data, format="audio/mp3")
-                        
-                    st.session_state.messages.append({"role": "assistant", "content": answer})
+                    
+                    if enable_voice:
+                        audio_data = generate_audio_edge(answer)
+                        if audio_data: st.audio(audio_data, format="audio/mp3")
                 except Exception as e:
                     st.error(f"Error: {str(e)}")
 
@@ -168,7 +210,6 @@ elif mode == "🎨 Generate Image":
                 english_prompt = translate_to_english(img_prompt)
                 safe_prompt = urllib.parse.quote(english_prompt)
                 image_url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width=1024&height=1024&nologo=true"
-                
                 st.image(image_url, caption=f"Generated from: {english_prompt}", use_container_width=True)
         else:
             st.warning("Please enter a prompt first.")
@@ -191,42 +232,32 @@ elif mode == "🌐 Web Search":
                         max_tokens=50
                     )
                     optimized_query = opt_response.choices[0].message.content.strip()
-                    
-                    if not optimized_query:
-                        optimized_query = search_query
+                    if not optimized_query: optimized_query = search_query
                         
                     ddgs = DDGS()
                     results = list(ddgs.text(optimized_query, max_results=5))
-                    
-                    if not results:
-                        results = list(ddgs.news(optimized_query, max_results=5))
+                    if not results: results = list(ddgs.news(optimized_query, max_results=5))
                     
                     if not results:
                         st.warning(f"সার্চ ইঞ্জিন থেকে কোনো তথ্য পাওয়া যায়নি।")
                     else:
                         context = "\n\n".join([f"Title: {r.get('title', '')}\nSnippet: {r.get('body', '')}" for r in results])
-                        
                         system_prompt = f"You are a smart AI assistant. Based on the following live web search results, answer the user's question accurately. The user's original question was: '{search_query}'.\n\nSearch Results:\n{context}"
                         
                         response = groq_client.chat.completions.create(
                             model="openai/gpt-oss-120b",
-                            messages=[
-                                {"role": "system", "content": system_prompt},
-                                {"role": "user", "content": search_query}
-                            ],
+                            messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": search_query}],
                             temperature=0.5,
                             max_tokens=1000
                         )
                         final_answer = response.choices[0].message.content
                         st.markdown(final_answer)
-                        
-                        # কপি বাটন
                         with st.expander("📋 Copy Search Result"):
                             st.code(final_answer, language="text")
 
-                        audio_data = generate_audio_edge(final_answer)
-                        if audio_data:
-                            st.audio(audio_data, format="audio/mp3")
+                        if enable_voice:
+                            audio_data = generate_audio_edge(final_answer)
+                            if audio_data: st.audio(audio_data, format="audio/mp3")
                             
                 except Exception as e:
                     st.error(f"সার্চ করতে সমস্যা হচ্ছে: {str(e)}")
