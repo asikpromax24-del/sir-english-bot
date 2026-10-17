@@ -6,5 +6,5 @@ requests
 edge-tts
 langdetect
 pandas
-youtube-transcript-api
 plotly
+yt-dlp
