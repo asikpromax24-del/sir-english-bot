@@ -1,8 +1,13 @@
 import os
+import gdown
 import gradio as gr
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import PeftModel
 import torch
+
+# Drive থেকে মডেল ডাউনলোড (ফোল্ডার আইডি দিয়ে)
+folder_id = "1L-beiQXuaQ-BBZ5DU7o4UaJRRmCUIQRV"
+gdown.download_folder(id=folder_id, output="./lora_model", quiet=False)
 
 base_model_name = "Qwen/Qwen2.5-0.5B-Instruct"
 adapter_path = "./lora_model"
