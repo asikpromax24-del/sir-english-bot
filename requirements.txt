@@ -5,3 +5,4 @@ ddgs
 requests
 edge-tts
 langdetect
+pandas
