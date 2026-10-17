@@ -9,131 +9,81 @@ import io
 from langdetect import detect
 import pandas as pd
 import plotly.express as px
-import sqlite3
 import json
 import hashlib
 import extra_streamlit_components as stx
 from datetime import datetime, timedelta
+from supabase import create_client, Client
 
 # ================= ১. পেজ কনফিগারেশন ও ডার্ক থিম =================
-# initial_sidebar_state="collapsed" দিলে মোবাইলে মেনু আইকনটা সবসময় দৃশ্যমান থাকে
 st.set_page_config(page_title="Super AI & Sir English", page_icon="🧠", layout="wide", initial_sidebar_state="collapsed")
 
 custom_css = """
 <style>
-    /* শুধু মেইন মেনু এবং ফুটার হাইড করা হলো, হেডার বা টুলবার নয় */
-    #MainMenu {visibility: hidden;} 
-    footer {visibility: hidden;} 
-    
-    /* ব্যাকগ্রাউন্ড ডার্ক করা */
+    #MainMenu {visibility: hidden;} footer {visibility: hidden;} 
     .stApp { background-color: #0E1117; color: #FAFAFA !important; }
     .block-container { padding-top: 1rem !important; padding-bottom: 6rem !important; padding-left: 1rem !important; padding-right: 1rem !important; max-width: 100% !important; }
-    
-    /* ================= মেনুবার (Sidebar) আইকন ফিক্স ================= */
-    /* উপরে বাম দিকের মেনু বাটনকে জোর করে দৃশ্যমান করা */
-    [data-testid="collapsedControl"] {
-        display: flex !important;
-        visibility: visible !important;
-        color: #FAFAFA !important;
-        background-color: #1E232B !important; 
-        border: 1px solid #444 !important;
-        border-radius: 5px !important;
-        margin-top: 10px !important;
-        margin-left: 10px !important;
-        z-index: 99999 !important;
-    }
-    [data-testid="collapsedControl"] svg {
-        fill: #FAFAFA !important;
-    }
-    
-    /* চ্যাট মেসেজ ডিজাইন */
-    div[data-testid="stChatMessage"] { 
-        background-color: #1E232B; border-radius: 10px; padding: 15px; margin-bottom: 10px; color: #FAFAFA !important;
-    }
+    [data-testid="collapsedControl"] { display: flex !important; visibility: visible !important; color: #FAFAFA !important; background-color: #1E232B !important; border: 1px solid #444 !important; border-radius: 5px !important; margin-top: 10px !important; margin-left: 10px !important; z-index: 99999 !important; }
+    [data-testid="collapsedControl"] svg { fill: #FAFAFA !important; }
+    div[data-testid="stChatMessage"] { background-color: #1E232B; border-radius: 10px; padding: 15px; margin-bottom: 10px; color: #FAFAFA !important; }
     div[data-testid="stChatMessage"] p, div[data-testid="stChatMessage"] li, div[data-testid="stChatMessage"] span,
-    div[data-testid="stChatMessage"] h1, div[data-testid="stChatMessage"] h2, div[data-testid="stChatMessage"] h3,
-    div[data-testid="stChatMessage"] strong { color: #FAFAFA !important; }
+    div[data-testid="stChatMessage"] h1, div[data-testid="stChatMessage"] h2, div[data-testid="stChatMessage"] h3 { color: #FAFAFA !important; }
     div[data-testid="stChatMessage"] table { border-collapse: collapse; width: 100%; margin: 10px 0; }
     div[data-testid="stChatMessage"] th, div[data-testid="stChatMessage"] td { color: #FAFAFA !important; border: 1px solid #555 !important; padding: 8px; }
-    
-    /* চ্যাট ইনপুট বক্স ফিক্স */
     div[data-testid="stChatInput"] { background-color: #1E232B !important; border-radius: 10px; }
     div[data-testid="stChatInput"] > div { background-color: #1E232B !important; border: 1px solid #444 !important; border-radius: 10px; }
     div[data-testid="stChatInput"] textarea { color: #FAFAFA !important; background-color: transparent !important; }
     div[data-testid="stChatInput"] textarea::placeholder { color: #888 !important; }
     div[data-testid="stChatInput"] button { background-color: #2B313A !important; border-radius: 5px !important; }
     div[data-testid="stChatInput"] button svg { fill: #FAFAFA !important; }
-    
-    /* ইনপুট বক্স এবং বাটন ডিজাইন */
-    div[data-testid="stTextInput"] input, div[data-testid="stTextArea"] textarea {
-        color: #FAFAFA !important; background-color: #1E232B !important; border: 1px solid #555 !important;
-    }
+    div[data-testid="stTextInput"] input, div[data-testid="stTextArea"] textarea { color: #FAFAFA !important; background-color: #1E232B !important; border: 1px solid #555 !important; }
     div[data-testid="stTextInput"] label, div[data-testid="stTextArea"] label, div[data-testid="stSelectbox"] label { color: #FAFAFA !important; }
     .stButton > button { color: #FAFAFA !important; background-color: #2B313A !important; border: 1px solid #555 !important; width: 100%; }
     .stButton > button:hover { background-color: #444 !important; border: 1px solid #FAFAFA !important; }
-    
     section[data-testid="stSidebar"] { background-color: #0E1117; border-right: 1px solid #333; }
     section[data-testid="stSidebar"] p, section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] h2, section[data-testid="stSidebar"] h3 { color: #FAFAFA !important; }
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
 
-# ================= ২. API Clients =================
+# ================= ২. API Clients & Supabase =================
 groq_client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+supabase: Client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
 
-# ================= ৩. ডেটাবেস সেটআপ =================
-def init_db():
-    conn = sqlite3.connect('super_ai.db')
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS users (email TEXT PRIMARY KEY, password TEXT)''')
-    c.execute('''CREATE TABLE IF NOT EXISTS chats (user_email TEXT, session_name TEXT, messages TEXT)''')
-    conn.commit()
-    return conn
-
-conn = init_db()
-
+# ================= ৩. ডেটাবেস ফাংশন =================
 def make_hashes(password):
     return hashlib.sha256(str.encode(password)).hexdigest()
 
 def create_user(email, password):
-    c = conn.cursor()
     try:
-        c.execute("INSERT INTO users (email, password) VALUES (?, ?)", (email, make_hashes(password)))
-        conn.commit()
+        supabase.table("users").insert({"email": email, "password": make_hashes(password)}).execute()
         return True
-    except sqlite3.IntegrityError:
+    except:
         return False
 
 def login_user(email, password):
-    c = conn.cursor()
-    c.execute("SELECT password FROM users WHERE email=?", (email,))
-    data = c.fetchone()
-    if data and data[0] == make_hashes(password):
+    response = supabase.table("users").select("password").eq("email", email).execute()
+    if response.data and response.data[0]["password"] == make_hashes(password):
         return True
     return False
 
 def save_chat(email, session_name, messages):
-    c = conn.cursor()
-    c.execute("DELETE FROM chats WHERE user_email=? AND session_name=?", (email, session_name))
-    c.execute("INSERT INTO chats (user_email, session_name, messages) VALUES (?, ?, ?)", (email, session_name, json.dumps(messages)))
-    conn.commit()
+    supabase.table("chats").delete().eq("user_email", email).eq("session_name", session_name).execute()
+    supabase.table("chats").insert({"user_email": email, "session_name": session_name, "messages": messages}).execute()
 
 def load_chats(email):
-    c = conn.cursor()
-    c.execute("SELECT session_name, messages FROM chats WHERE user_email=?", (email,))
-    rows = c.fetchall()
-    sessions = {row[0]: json.loads(row[1]) for row in rows}
+    response = supabase.table("chats").select("session_name, messages").eq("user_email", email).execute()
+    sessions = {row["session_name"]: row["messages"] for row in response.data}
     return sessions if sessions else {"Chat 1": []}
 
-# ================= ৪. অডিও ও স্ট্রিমিং ফাংশন =================
+# ================= ৪. অডিও ও স্ট্রিমিং =================
 def generate_audio_edge(text, speed="+0%"):
     try:
         lang = detect(text)
         voice_map = {'bn': 'bn-BD-NabanitaNeural', 'en': 'en-US-AriaNeural', 'ru': 'ru-RU-SvetlanaNeural', 'ar': 'ar-SA-ZariyahNeural', 'hi': 'hi-IN-SwaraNeural'}
         voice = voice_map.get(lang, 'en-US-AriaNeural')
     except: voice = 'en-US-AriaNeural'
-
     async def _generate():
         communicate = edge_tts.Communicate(text, voice, rate=speed)
         audio_data = b""
@@ -147,16 +97,13 @@ def generate_audio_edge(text, speed="+0%"):
     except: return None
 
 def stream_groq_response(chat_history):
-    stream = groq_client.chat.completions.create(
-        model="openai/gpt-oss-120b", messages=chat_history, temperature=0.7, max_tokens=1500, stream=True
-    )
+    stream = groq_client.chat.completions.create(model="openai/gpt-oss-120b", messages=chat_history, temperature=0.7, max_tokens=1500, stream=True)
     for chunk in stream:
         if chunk.choices[0].delta.content:
             yield chunk.choices[0].delta.content
 
 # ================= ৫. কুকি ম্যানেজমেন্ট =================
 cookie_manager = stx.CookieManager(key="cookie_manager")
-
 if "logged_in" not in st.session_state: st.session_state.logged_in = False
 if "user_email" not in st.session_state: st.session_state.user_email = ""
 
@@ -167,12 +114,10 @@ if not st.session_state.logged_in:
         st.session_state.user_email = saved_email
         st.rerun()
 
-# ================= ৬. লগইন ও সাইনআপ পেজ =================
+# ================= ৬. লগইন ও সাইনআপ =================
 if not st.session_state.logged_in:
     st.title("🧠 Welcome to Super AI & Sir English")
-    
     tab1, tab2 = st.tabs(["🔐 Login", "📝 Sign Up"])
-    
     with tab1:
         st.subheader("Login to your account")
         login_email = st.text_input("Email Address", key="login_email")
@@ -184,36 +129,27 @@ if not st.session_state.logged_in:
                 expires = datetime.now() + timedelta(days=30)
                 cookie_manager.set("sir_english_user", login_email, expires_at=expires)
                 st.rerun()
-            else:
-                st.error("Invalid Email or Password")
-
+            else: st.error("Invalid Email or Password")
     with tab2:
         st.subheader("Create a new account")
         new_email = st.text_input("Email Address", key="new_email")
         new_pass = st.text_input("Password (Min 6 characters)", type="password", key="new_pass")
         if st.button("Sign Up"):
-            if len(new_pass) < 6:
-                st.warning("Password must be at least 6 characters long.")
+            if len(new_pass) < 6: st.warning("Password must be at least 6 characters long.")
             else:
-                if create_user(new_email, new_pass):
-                    st.success("Account created successfully! Please go to the Login tab.")
-                else:
-                    st.error("This email is already registered.")
+                if create_user(new_email, new_pass): st.success("Account created successfully! Please go to the Login tab.")
+                else: st.error("This email is already registered.")
     st.stop()
 
 # ================= ৭. মেইন অ্যাপ =================
 st.sidebar.title("🧠 Super AI & Sir English")
 st.sidebar.success(f"Logged in as:\n{st.session_state.user_email}")
-
 ADMIN_EMAIL = st.secrets.get("ADMIN_EMAIL", "admin@admin.com")
 if st.session_state.user_email == ADMIN_EMAIL:
     st.sidebar.markdown("---")
     st.sidebar.subheader("👑 Admin Panel")
-    st.sidebar.info("You have Admin Access.")
     if st.sidebar.button("🗑️ Clear ALL Users Chats"):
-        c = conn.cursor()
-        c.execute("DELETE FROM chats")
-        conn.commit()
+        supabase.table("chats").delete().neq("id", 0).execute()
         st.sidebar.success("All chats cleared!")
 
 if st.sidebar.button("Logout"):
@@ -244,11 +180,18 @@ st.sidebar.subheader("⚙️ Settings")
 
 if app_mode == "🤖 Super AI (General)":
     tool = st.sidebar.selectbox("Choose Tool", ["💬 Chat & Analyze", "🎨 Image Generator", "📊 Data Visualization"])
-    persona_prompt = "You are a super intelligent AI assistant."
+    persona_choice = st.sidebar.selectbox("Select AI Persona", ["General Assistant", "Expert Python Coder", "Custom Persona"])
+    if persona_choice == "Custom Persona":
+        custom_prompt = st.sidebar.text_area("Enter Custom Instructions", "You are a helpful AI assistant.")
+        persona_prompt = custom_prompt
+    elif persona_choice == "Expert Python Coder":
+        persona_prompt = "You are a senior Python developer. Write clean code with explanations."
+    else:
+        persona_prompt = "You are a super intelligent AI assistant."
     auto_search = st.sidebar.checkbox("🌐 Enable Auto Web Search")
 else:
     tool = st.sidebar.selectbox("Teacher Tool", ["💬 Chat with Teacher", "📝 Placement Test", "🎤 Spoken Practice"])
-    persona_prompt = "You are 'Sir English', a highly professional, strict, and expert English teacher. You understand Bengali. Your goal is to correct the user's English, point out mistakes immediately, explain the rules in Bengali, and provide high-level examples. Be encouraging but strict."
+    persona_prompt = "You are 'Sir English', a highly professional, strict, and expert English teacher. You understand Bengali. Your goal is to correct the user's English, point out mistakes immediately, explain the rules in Bengali, and provide high-level examples."
     auto_search = False
 
 enable_voice = st.sidebar.checkbox("🔊 Enable Auto Voice Output", value=True)
@@ -263,34 +206,26 @@ if st.sidebar.button("🗑️ Clear Current Chat"):
 if app_mode == "🎓 Sir English (Teacher)" and tool == "📝 Placement Test":
     st.title("📝 English Placement Test")
     st.write("Answer these 5 questions. The AI will determine your CEFR level (A1 to C2).")
-    
     q1 = st.text_input("1. What is the past tense of 'go'?")
     q2 = st.text_input("2. Write a sentence using 'because'.")
     q3 = st.text_input("3. Correct this sentence: 'She don't like apples.'")
     q4 = st.text_input("4. What is the difference between 'affect' and 'effect'?")
     q5 = st.text_area("5. Write a short paragraph (3-4 sentences) about your favorite hobby.")
-    
     if st.button("Submit Test & Get Level"):
         if q1 and q2 and q3 and q4 and q5:
             with st.spinner("Evaluating your level..."):
                 eval_prompt = f"You are an English examiner. Evaluate these answers and determine the user's CEFR level (A1, A2, B1, B2, C1, or C2). Give the level first, then explain why in Bengali. \nAnswers:\n1: {q1}\n2: {q2}\n3: {q3}\n4: {q4}\n5: {q5}"
-                response = groq_client.chat.completions.create(
-                    model="openai/gpt-oss-120b",
-                    messages=[{"role": "user", "content": eval_prompt}]
-                )
+                response = groq_client.chat.completions.create(model="openai/gpt-oss-120b", messages=[{"role": "user", "content": eval_prompt}])
                 st.success(response.choices[0].message.content)
-        else:
-            st.warning("Please answer all questions.")
+        else: st.warning("Please answer all questions.")
 
 elif tool in ["💬 Chat & Analyze", "💬 Chat with Teacher", "🎤 Spoken Practice"]:
     st.title("💬 " + tool)
-    
     for message in current_messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
             if message["role"] == "assistant":
-                with st.expander("📋 Copy"):
-                    st.code(message["content"], language="text")
+                with st.expander("📋 Copy"): st.code(message["content"], language="text")
 
     if current_messages and current_messages[-1]["role"] == "assistant":
         if st.button("🔄 Regenerate Last Response"):
@@ -308,13 +243,9 @@ elif tool in ["💬 Chat & Analyze", "💬 Chat with Teacher", "🎤 Spoken Prac
 
     if prompt or audio_value or st.session_state.get("trigger_regen", False):
         st.session_state.trigger_regen = False
-        
-        if prompt:
-            user_text = prompt
-        elif current_messages and current_messages[-1]["role"] == "user":
-            user_text = current_messages[-1]["content"]
-        else:
-            user_text = "Please analyze this file."
+        if prompt: user_text = prompt
+        elif current_messages and current_messages[-1]["role"] == "user": user_text = current_messages[-1]["content"]
+        else: user_text = "Please analyze this file."
 
         if audio_value:
             with st.spinner("Transcribing..."):
@@ -337,7 +268,6 @@ elif tool in ["💬 Chat & Analyze", "💬 Chat with Teacher", "🎤 Spoken Prac
                         st.markdown(answer)
                         current_messages.append({"role": "assistant", "content": answer})
                         save_chat(st.session_state.user_email, st.session_state.current_session, current_messages)
-                        
                         if enable_voice:
                             audio_data = generate_audio_edge(answer, voice_speed)
                             if audio_data: st.audio(audio_data, format="audio/mp3", autoplay=True)
@@ -348,15 +278,11 @@ elif tool in ["💬 Chat & Analyze", "💬 Chat with Teacher", "🎤 Spoken Prac
                     if auto_search:
                         results = list(DDGS().text(user_text, max_results=3))
                         if results: context = "\n".join([f"Snippet: {r['body']}" for r in results])
-                    
                     final_prompt = persona_prompt + context + "\n\nIMPORTANT: Reply in clear text. Use standard Markdown tables. Reply in the user's language."
                     chat_history = [{"role": "system", "content": final_prompt}] + [{"role": m["role"], "content": m["content"]} for m in current_messages[-20:]]
-                    
                     answer = st.write_stream(stream_groq_response(chat_history))
-                    
                     current_messages.append({"role": "assistant", "content": answer})
                     save_chat(st.session_state.user_email, st.session_state.current_session, current_messages)
-                    
                     if enable_voice:
                         audio_data = generate_audio_edge(answer, voice_speed)
                         if audio_data: st.audio(audio_data, format="audio/mp3", autoplay=True)
