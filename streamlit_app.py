@@ -15,7 +15,7 @@ def load_model():
     tokenizer = AutoTokenizer.from_pretrained(base_model_name)
     model = AutoModelForCausalLM.from_pretrained(
     base_model_name, 
-    torch_dtype=torch.float32
+    torch_dtype=torch.float16
 )
     model = PeftModel.from_pretrained(model, "./lora_model")
     return model, tokenizer
