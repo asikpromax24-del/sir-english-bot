@@ -3,14 +3,44 @@ from groq import Groq
 import google.generativeai as genai
 from ddgs import DDGS
 import urllib.parse
-from gtts import gTTS
+import edge_tts
+import asyncio
 import io
+import re
 
 st.set_page_config(page_title="Super AI - Pro", page_icon="🧠", layout="wide")
 
 # API Clients
 groq_client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+
+# বাংলা লেখা আছে কি না চেক করার ফাংশন
+def is_bengali(text):
+    return bool(re.search(r'[\u0980-\u09FF]', text))
+
+# অডিও জেনারেট করার নতুন ফাংশন (Edge TTS ব্যবহার করে)
+def generate_audio_edge(text):
+    # বাংলা নাকি ইংরেজি ভয়েস হবে তা নির্ধারণ
+    if is_bengali(text):
+        voice = 'bn-BD-NabanitaNeural' # বাংলা ফিমেল ভয়েস (খুব স্বাভাবিক)
+    else:
+        voice = 'en-US-AriaNeural'     # ইংরেজি ফিমেল ভয়েস
+
+    async def _generate():
+        communicate = edge_tts.Communicate(text, voice)
+        audio_data = b""
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                audio_data += chunk["data"]
+        return audio_data
+
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        audio_bytes = loop.run_until_complete(_generate())
+        return io.BytesIO(audio_bytes)
+    except Exception as e:
+        return None
 
 # বাংলা থেকে ইংরেজি অনুবাদ করার ফাংশন (ছবি তৈরির জন্য)
 def translate_to_english(text):
@@ -22,22 +52,10 @@ def translate_to_english(text):
     except:
         return text
 
-# অডিও জেনারেট করার ফাংশন
-def generate_audio(text, lang='en'):
-    try:
-        tts = gTTS(text=text, lang=lang, slow=False)
-        audio_bytes = io.BytesIO()
-        tts.write_to_fp(audio_bytes)
-        audio_bytes.seek(0)
-        return audio_bytes
-    except:
-        return None
-
 # Sidebar Menu
 st.sidebar.title("🧠 Super AI Modes")
 mode = st.sidebar.radio("Choose a mode:", ["💬 Chat & Analyze", "🎨 Generate Image", "🌐 Web Search"])
 
-# Chat History & Download
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -111,8 +129,8 @@ if mode == "💬 Chat & Analyze":
                     
                     st.markdown(answer)
                     
-                    # অডিও বাটন
-                    audio_data = generate_audio(answer, lang='en') # ডিফল্ট ইংরেজি, চাইলে বাংলাও করা যায়
+                    # নতুন অডিও জেনারেটর ব্যবহার
+                    audio_data = generate_audio_edge(answer)
                     if audio_data:
                         st.audio(audio_data, format="audio/mp3")
                         
@@ -184,8 +202,8 @@ elif mode == "🌐 Web Search":
                         final_answer = response.choices[0].message.content
                         st.markdown(final_answer)
                         
-                        # অডিও বাটন
-                        audio_data = generate_audio(final_answer, lang='en')
+                        # নতুন অডিও জেনারেটর ব্যবহার
+                        audio_data = generate_audio_edge(final_answer)
                         if audio_data:
                             st.audio(audio_data, format="audio/mp3")
                             
