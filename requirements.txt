@@ -1,5 +1,5 @@
 streamlit
 groq
 google-generativeai
-duckduckgo-search
+ddgs
 requests
