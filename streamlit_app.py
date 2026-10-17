@@ -12,6 +12,7 @@ import plotly.express as px
 import re
 import sqlite3
 import json
+import uuid
 
 # ================= ১. পেজ কনফিগারেশন ও ডার্ক থিম =================
 st.set_page_config(page_title="Super AI & Sir English", page_icon="🧠", layout="wide", initial_sidebar_state="expanded")
@@ -62,26 +63,26 @@ genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 def init_db():
     conn = sqlite3.connect('super_ai.db')
     c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS chats (username TEXT, session_name TEXT, messages TEXT)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS chats (user_id TEXT, session_name TEXT, messages TEXT)''')
     conn.commit()
     return conn
 
 conn = init_db()
 
-def save_chat(username, session_name, messages):
+def save_chat(user_id, session_name, messages):
     c = conn.cursor()
-    c.execute("DELETE FROM chats WHERE username=? AND session_name=?", (username, session_name))
-    c.execute("INSERT INTO chats (username, session_name, messages) VALUES (?, ?, ?)", (username, session_name, json.dumps(messages)))
+    c.execute("DELETE FROM chats WHERE user_id=? AND session_name=?", (user_id, session_name))
+    c.execute("INSERT INTO chats (user_id, session_name, messages) VALUES (?, ?, ?)", (user_id, session_name, json.dumps(messages)))
     conn.commit()
 
-def load_chats(username):
+def load_chats(user_id):
     c = conn.cursor()
-    c.execute("SELECT session_name, messages FROM chats WHERE username=?", (username,))
+    c.execute("SELECT session_name, messages FROM chats WHERE user_id=?", (user_id,))
     rows = c.fetchall()
     sessions = {row[0]: json.loads(row[1]) for row in rows}
     return sessions if sessions else {"Chat 1": []}
 
-# ================= ৩. ফাংশনসমূহ (Audio, Stream) =================
+# ================= ৩. ফাংশনসমূহ =================
 def generate_audio_edge(text, speed="+0%"):
     try:
         lang = detect(text)
@@ -109,41 +110,49 @@ def stream_groq_response(chat_history):
         if chunk.choices[0].delta.content:
             yield chunk.choices[0].delta.content
 
-# ================= ৪. ইউজার অথেনটিকেশন (সুরক্ষিত লগইন) =================
-if "logged_in" not in st.session_state: st.session_state.logged_in = False
-if "username" not in st.session_state: st.session_state.username = ""
+# ================= ৪. সেশন ম্যানেজমেন্ট =================
+if "user_id" not in st.session_state:
+    st.session_state.user_id = str(uuid.uuid4())
 
-if not st.session_state.logged_in:
-    st.title("🔐 Welcome to Super AI & Sir English")
-    st.markdown("Please log in to continue.")
-    
-    # এখানে আর কোনো পাসওয়ার্ড দেখাবে না
-    user = st.text_input("Username")
-    pwd = st.text_input("Password", type="password")
-    
-    if st.button("Login"):
-        # Secrets থেকে আসল পাসওয়ার্ড চেক করা হচ্ছে
-        expected_user = st.secrets.get("ADMIN_USERNAME", "Asikul")
-        expected_pass = st.secrets.get("ADMIN_PASSWORD", "Asikul90dss")
-        
-        if user == expected_user and pwd == expected_pass:
-            st.session_state.logged_in = True
-            st.session_state.username = user
+if "is_admin" not in st.session_state:
+    st.session_state.is_admin = False
+
+# ================= ৫. সিক্রেট অ্যাডমিন প্যানেল (লুকানো) =================
+# ইউআরএল-এ ?admin=true থাকলে তবেই এই অংশটা কাজ করবে
+query_params = st.query_params
+is_admin_url = query_params.get("admin") == "true"
+
+if is_admin_url and not st.session_state.is_admin:
+    st.sidebar.warning("🔒 Secret Admin Area")
+    admin_pwd = st.sidebar.text_input("Enter Admin Password", type="password")
+    if st.sidebar.button("Unlock Admin Panel"):
+        # এখানে সিক্রেট থেকে পাসওয়ার্ড চেক হচ্ছে
+        if admin_pwd == st.secrets.get("ADMIN_PASSWORD", "lamiya90dss#@"):
+            st.session_state.is_admin = True
+            st.sidebar.success("Access Granted!")
             st.rerun()
-        else: st.error("Wrong Username or Password!")
-    st.stop()
+        else:
+            st.sidebar.error("Access Denied!")
 
-# ================= ৫. সাইডবার ও নেভিগেশন =================
-st.sidebar.title("🧠 Navigation")
-st.sidebar.success(f"User: {st.session_state.username}")
-if st.sidebar.button("Logout"):
-    st.session_state.logged_in = False
-    st.rerun()
+# অ্যাডমিন হলে কিছু এক্সট্রা অপশন দেখাবে
+if st.session_state.is_admin:
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("👑 Admin Controls")
+    if st.sidebar.button("🗑️ Clear All Users Data"):
+        c = conn.cursor()
+        c.execute("DELETE FROM chats")
+        conn.commit()
+        st.sidebar.success("All chats cleared!")
 
+# ================= ৬. মেইন অ্যাপ (সব ইউজারের জন্য) =================
+st.sidebar.title("🧠 Super AI & Sir English")
+
+# মোড সিলেকশন
 app_mode = st.sidebar.radio("Select App Mode", ["🤖 Super AI (General)", "🎓 Sir English (Teacher)"])
 
+# চ্যাট সেশন ম্যানেজমেন্ট
 if "chat_sessions" not in st.session_state:
-    st.session_state.chat_sessions = load_chats(st.session_state.username)
+    st.session_state.chat_sessions = load_chats(st.session_state.user_id)
 if "current_session" not in st.session_state:
     st.session_state.current_session = list(st.session_state.chat_sessions.keys())[0]
 
@@ -157,6 +166,7 @@ session_list = list(st.session_state.chat_sessions.keys())
 st.session_state.current_session = st.sidebar.selectbox("Select Chat History", session_list, index=session_list.index(st.session_state.current_session))
 current_messages = st.session_state.chat_sessions[st.session_state.current_session]
 
+# সেটিংস
 st.sidebar.markdown("---")
 st.sidebar.subheader("⚙️ Settings")
 
@@ -174,17 +184,10 @@ voice_speed = st.sidebar.select_slider("Voice Speed", options=["-50%", "-25%", "
 
 if st.sidebar.button("🗑️ Clear Current Chat"):
     st.session_state.chat_sessions[st.session_state.current_session] = []
-    save_chat(st.session_state.username, st.session_state.current_session, [])
+    save_chat(st.session_state.user_id, st.session_state.current_session, [])
     st.rerun()
 
-st.sidebar.markdown("---")
-st.sidebar.subheader("📊 Progress Dashboard")
-total_msgs = sum(len(msgs) for msgs in st.session_state.chat_sessions.values())
-st.sidebar.metric("Total Messages Sent", total_msgs)
-st.sidebar.metric("Active Chat Sessions", len(st.session_state.chat_sessions))
-
-# ================= ৬. মেইন অ্যাপ লজিক =================
-
+# ================= ৭. অ্যাপ লজিক =================
 if app_mode == "🎓 Sir English (Teacher)" and tool == "📝 Placement Test":
     st.title("📝 English Placement Test")
     st.write("Answer these 5 questions. The AI will determine your CEFR level (A1 to C2).")
@@ -220,7 +223,7 @@ elif tool in ["💬 Chat & Analyze", "💬 Chat with Teacher", "🎤 Spoken Prac
     if current_messages and current_messages[-1]["role"] == "assistant":
         if st.button("🔄 Regenerate Last Response"):
             current_messages.pop()
-            save_chat(st.session_state.username, st.session_state.current_session, current_messages)
+            save_chat(st.session_state.user_id, st.session_state.current_session, current_messages)
             st.session_state.trigger_regen = True
             st.rerun()
 
@@ -249,7 +252,7 @@ elif tool in ["💬 Chat & Analyze", "💬 Chat with Teacher", "🎤 Spoken Prac
 
         if prompt or audio_value:
             current_messages.append({"role": "user", "content": user_text})
-            save_chat(st.session_state.username, st.session_state.current_session, current_messages)
+            save_chat(st.session_state.user_id, st.session_state.current_session, current_messages)
             with st.chat_message("user"): st.markdown(user_text)
 
         with st.chat_message("assistant"):
@@ -261,7 +264,7 @@ elif tool in ["💬 Chat & Analyze", "💬 Chat with Teacher", "🎤 Spoken Prac
                         answer = response.text
                         st.markdown(answer)
                         current_messages.append({"role": "assistant", "content": answer})
-                        save_chat(st.session_state.username, st.session_state.current_session, current_messages)
+                        save_chat(st.session_state.user_id, st.session_state.current_session, current_messages)
                         
                         if enable_voice:
                             audio_data = generate_audio_edge(answer, voice_speed)
@@ -280,7 +283,7 @@ elif tool in ["💬 Chat & Analyze", "💬 Chat with Teacher", "🎤 Spoken Prac
                     answer = st.write_stream(stream_groq_response(chat_history))
                     
                     current_messages.append({"role": "assistant", "content": answer})
-                    save_chat(st.session_state.username, st.session_state.current_session, current_messages)
+                    save_chat(st.session_state.user_id, st.session_state.current_session, current_messages)
                     
                     if enable_voice:
                         audio_data = generate_audio_edge(answer, voice_speed)
