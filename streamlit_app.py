@@ -13,16 +13,19 @@ import re
 import sqlite3
 import json
 
-# ১. পেজ কনফিগারেশন ও ডার্ক থিম (ইনপুট বক্স ফিক্সসহ)
+# ১. পেজ কনফিগারেশন ও ডার্ক থিম
 st.set_page_config(page_title="Super AI Pro", page_icon="🧠", layout="wide", initial_sidebar_state="expanded")
 
 custom_css = """
 <style>
-    /* Streamlit ডিফল্ট মেনু হাইড করা */
-    #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
+    /* মেনু এবং ফুটার হাইড করা (কিন্তু হেডার হাইড করা যাবে না, নাহলে সাইডবার বাটন হারিয়ে যায়) */
+    #MainMenu {visibility: hidden;} 
+    footer {visibility: hidden;} 
+    header { background-color: transparent !important; }
     
     /* ব্যাকগ্রাউন্ড ডার্ক করা */
     .stApp { background-color: #0E1117; color: #FAFAFA !important; }
+    .stChatFloatingInputContainer { background-color: #0E1117; }
     
     /* চ্যাট মেসেজ বক্স ডার্ক করা এবং লেখা সাদা করা */
     div[data-testid="stChatMessage"] { 
@@ -33,7 +36,7 @@ custom_css = """
         color: #FAFAFA !important;
     }
     
-    /* চ্যাটের ভেতরের সব লেখা, বুলেট পয়েন্ট, হেডিং সাদা করা */
+    /* চ্যাটের ভেতরের সব লেখা সাদা করা */
     div[data-testid="stChatMessage"] p, 
     div[data-testid="stChatMessage"] li, 
     div[data-testid="stChatMessage"] span,
@@ -55,34 +58,26 @@ custom_css = """
     }
     div[data-testid="stChatMessage"] th { background-color: #2B313A; }
     
-    /* ================= CHAT INPUT BOX FIX (মেইন সমস্যা) ================= */
-    /* চ্যাট ইনপুট বক্সের ব্যাকগ্রাউন্ড কালো করা */
-    div[data-testid="stChatInput"] {
-        background-color: #1E232B !important;
-        border-radius: 10px;
+    /* ================= CHAT INPUT BOX FIX ================= */
+    div[data-testid="stChatInput"] { background-color: #1E232B !important; border-radius: 10px; }
+    div[data-testid="stChatInput"] > div { background-color: #1E232B !important; border: 1px solid #444 !important; border-radius: 10px; }
+    div[data-testid="stChatInput"] textarea { color: #FAFAFA !important; background-color: transparent !important; }
+    div[data-testid="stChatInput"] textarea::placeholder { color: #888 !important; }
+    
+    /* সেন্ড বাটন (Send Button) পরিষ্কার দেখা যাওয়ার ব্যবস্থা */
+    div[data-testid="stChatInput"] button {
+        background-color: #2B313A !important;
+        border-radius: 5px !important;
     }
-    div[data-testid="stChatInput"] > div {
-        background-color: #1E232B !important;
-        border: 1px solid #444 !important;
-        border-radius: 10px;
-    }
-    /* ইনপুট বক্সের ভেতরের লেখা সাদা করা */
-    div[data-testid="stChatInput"] textarea {
-        color: #FAFAFA !important; 
-        background-color: transparent !important;
-    }
-    /* প্লেসহোল্ডার (Type your prompt here...) এর কালার ঠিক করা */
-    div[data-testid="stChatInput"] textarea::placeholder {
-        color: #888 !important; 
+    div[data-testid="stChatInput"] button svg {
+        fill: #FAFAFA !important; /* আইকন সাদা করা */
     }
     
-    /* সাইডবারের টেক্সট এরিয়া (Custom Persona) ফিক্স */
+    /* সাইডবারের টেক্সট এরিয়া ফিক্স */
     .stTextInput input, .stTextArea textarea {
         color: #FAFAFA !important;
         background-color: #1E232B !important;
     }
-    
-    /* Expander (Copy) লেখা সাদা করা */
     .streamlit-expanderHeader { color: #FAFAFA !important; }
 </style>
 """
@@ -183,7 +178,7 @@ st.sidebar.markdown("---")
 st.sidebar.subheader("⚙️ Settings")
 persona_choice = st.sidebar.selectbox("Select AI Persona", ["General Assistant", "Strict English Teacher", "Expert Python Coder", "Custom Persona"])
 if persona_choice == "Custom Persona":
-    custom_prompt = st.sidebar.text_area("Enter Custom Instructions (e.g., 'You are a doctor')", "You are a helpful AI.")
+    custom_prompt = st.sidebar.text_area("Enter Custom Instructions", "You are a helpful AI.")
     persona_prompt = custom_prompt
 else:
     persona_prompts = {"General Assistant": "You are a super intelligent AI assistant.", "Strict English Teacher": "You are a strict English teacher.", "Expert Python Coder": "You are a senior Python developer."}
@@ -254,7 +249,7 @@ elif mode == "📊 Data Visualization":
     if csv_file:
         df = pd.read_csv(csv_file)
         st.write("### Data Preview:", df.head())
-        chart_prompt = st.text_input("What kind of chart do you want? (e.g., 'Draw a bar chart of Sales by Region')")
+        chart_prompt = st.text_input("What kind of chart do you want?")
         if st.button("Generate Chart"):
             if chart_prompt:
                 with st.spinner("Generating Chart..."):
