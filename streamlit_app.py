@@ -8,15 +8,21 @@ import os
 @st.cache_resource
 def load_model():
     folder_id = "1L-beiQXuaQ-BBZ5DU7o4UaJRRmCUIQRV"
+    
+    # Drive থেকে ফোল্ডার ডাউনলোড (এবার সরাসরি কারেন্ট ডিরেক্টরিতে নামবে)
     if not os.path.exists("./lora_model"):
-        gdown.download_folder(id=folder_id, output="./lora_model", quiet=False)
+        gdown.download_folder(id=folder_id, quiet=False, use_cookies=False)
     
     base_model_name = "Qwen/Qwen2.5-0.5B-Instruct"
     tokenizer = AutoTokenizer.from_pretrained(base_model_name)
+    
+    # মডেল লোড
     model = AutoModelForCausalLM.from_pretrained(
-    base_model_name, 
-    torch_dtype=torch.float16
-)
+        base_model_name, 
+        torch_dtype=torch.float16
+    )
+    
+    # লোরা অ্যাডাপ্টার লোড
     model = PeftModel.from_pretrained(model, "./lora_model")
     return model, tokenizer
 
