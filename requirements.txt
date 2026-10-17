@@ -3,3 +3,4 @@ groq
 google-generativeai
 ddgs
 requests
+gTTS
