@@ -14,10 +14,9 @@ def load_model():
     base_model_name = "Qwen/Qwen2.5-0.5B-Instruct"
     tokenizer = AutoTokenizer.from_pretrained(base_model_name)
     model = AutoModelForCausalLM.from_pretrained(
-        base_model_name, 
-        load_in_4bit=True,
-        device_map="auto"
-    )
+    base_model_name, 
+    torch_dtype=torch.float32
+)
     model = PeftModel.from_pretrained(model, "./lora_model")
     return model, tokenizer
 
