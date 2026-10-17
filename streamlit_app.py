@@ -155,35 +155,52 @@ if mode == "💬 Chat & Analyze":
 # ২. ইউটিউব সামারাইজার
 elif mode == "📺 YouTube Summarizer":
     st.title("📺 YouTube Video Summarizer")
-    st.write("Enter a YouTube link, and I will summarize the video for you in Bengali.")
+    st.write("Enter a YouTube link, and I will summarize or explain the video for you.")
+    
     yt_url = st.text_input("YouTube Video URL:")
     
-    if st.button("Summarize Video"):
+    # ইউজার নিজে লিখবে সে কী চায় (বাংলা, ইংরেজি বা অন্য যেকোনো ভাষায়)
+    yt_prompt = st.text_input(
+        "What do you want me to do with this video?", 
+        value="Summarize this video clearly in English."
+    )
+    
+    if st.button("Process Video"):
         if yt_url:
-            with st.spinner("Fetching transcript and summarizing..."):
+            with st.spinner("Fetching transcript and processing..."):
                 try:
                     # ভিডিও আইডি বের করা
                     video_id = re.search(r'(?:v=|\/)([0-9A-Za-z_-]{11}).*', yt_url).group(1)
-                    transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=['en', 'bn', 'hi'])
-                    transcript_text = " ".join([t['text'] for t in transcript_list])
                     
-                    # এআই দিয়ে সামারাইজ
-                    prompt = f"Summarize the following YouTube video transcript in clear and professional Bengali. Highlight the main points:\n\n{transcript_text[:10000]}" # লিমিট দেওয়া হলো
+                    try:
+                        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+                        try:
+                            transcript = transcript_list.find_transcript(['en', 'bn', 'hi'])
+                        except:
+                            transcript = list(transcript_list)[0]
+                        
+                        transcript_data = transcript.fetch()
+                        transcript_text = " ".join([t['text'] for t in transcript_data])
+                    except Exception as e:
+                        st.error("Sorry! This video either has no subtitles or YouTube blocked the request. Please try another video.")
+                        st.stop()
+                    
+                    # এআই-কে ইউজারের চাহিদা অনুযায়ী উত্তর দিতে বলা
+                    prompt = f"User Instruction: {yt_prompt}\n\nYouTube Video Transcript:\n{transcript_text[:15000]}" 
                     response = groq_client.chat.completions.create(
                         model="openai/gpt-oss-120b",
                         messages=[{"role": "user", "content": prompt}],
                         temperature=0.5, max_tokens=1500
                     )
                     summary = response.choices[0].message.content
-                    st.markdown("### 📝 ভিডিওর সারসংক্ষেপ:")
+                    st.markdown("### 📝 Result:")
                     st.markdown(summary)
                     
                     if enable_voice:
                         audio_data = generate_audio_edge(summary)
                         if audio_data: st.audio(audio_data, format="audio/mp3")
                 except Exception as e:
-                    st.error("দুঃখিত! এই ভিডিওর ট্রান্সক্রিপ্ট পাওয়া যায়নি বা ভিডিওটিতে সাবটাইটেল নেই।")
-
+                    st.error(f"An error occurred: {str(e)}")
 # ৩. ডেটা ভিজুয়ালাইজেশন (CSV)
 elif mode == "📊 Data Visualization":
     st.title("📊 AI Data Visualization")
