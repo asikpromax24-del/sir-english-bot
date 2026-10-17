@@ -7,3 +7,4 @@ langdetect
 pandas
 plotly
 extra-streamlit-components
+supabase
