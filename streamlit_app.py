@@ -119,20 +119,20 @@ elif mode == "🌐 Web Search":
         if search_query:
             with st.spinner("Searching the web..."):
                 try:
-                    from duckduckgo_search import DDGS
+                    from ddgs import DDGS
                     ddgs = DDGS()
                     
-                    # প্রথমে সাধারণ সার্চ
+                    # নতুন ddgs লাইব্রেরি দিয়ে সার্চ
                     results = list(ddgs.text(search_query, max_results=5))
                     
-                    # যদি খালি আসে, তবে নিউজ সার্চ চেষ্টা করবে
+                    # যদি সাধারণ সার্চে কিছু না পাওয়া যায়, তবে নিউজ সার্চ করবে
                     if not results:
                         results = list(ddgs.news(search_query, max_results=5))
                     
                     if not results:
                         st.warning("সার্চ ইঞ্জিন থেকে কোনো তথ্য পাওয়া যায়নি। অনুগ্রহ করে অন্য কোনো প্রশ্ন লিখে চেষ্টা করুন।")
                     else:
-                        context = "\n\n".join([f"Title: {r.get('title', '')}\nSnippet: {r.get('body', r.get('excerpt', ''))}" for r in results])
+                        context = "\n\n".join([f"Title: {r.get('title', '')}\nSnippet: {r.get('body', '')}" for r in results])
                         
                         system_prompt = f"You are a smart AI assistant. Based on the following live web search results, answer the user's question accurately. If the results don't contain the answer, say 'I couldn't find the specific answer in the latest web results.'\n\nSearch Results:\n{context}"
                         
