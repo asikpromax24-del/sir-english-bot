@@ -3,35 +3,29 @@ from groq import Groq
 import google.generativeai as genai
 from duckduckgo_search import DDGS
 import urllib.parse
-import os
 import streamlit.components.v1 as components
 
-# Streamlit-এর কানেকশন টাইমআউট কমানোর ট্রিক
 st.set_page_config(page_title="Super AI - Pro", page_icon="🧠", layout="wide")
 
 # API Clients
 groq_client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
-# বাংলা থেকে ইংরেজি অনুবাদ করার ফাংশন (ছবি তৈরির জন্য)
+# বাংলা থেকে ইংরেজি অনুবাদ করার ফাংশন (Gemini ব্যবহার করে)
 def translate_to_english(text):
     prompt = f"Translate the following Bengali or mixed text into a detailed English image generation prompt. Only output the English translation, nothing else:\n\n{text}"
     try:
-        response = groq_client.chat.completions.create(
-            model="openai/gpt-oss-120b",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
-            max_tokens=200
-        )
-        return response.choices[0].message.content.strip()
-    except:
+        # ট্রান্সলেশনের জন্য Gemini ব্যবহার করা হলো (কম রেস্ট্রিক্টিভ)
+        gemini_model = genai.GenerativeModel('gemini-3.8-flash')
+        response = gemini_model.generate_content(prompt)
+        return response.text.strip()
+    except Exception as e:
         return text # অনুবাদ ব্যর্থ হলে আসল টেক্সটই পাঠাবে
 
 # Sidebar Menu
 st.sidebar.title("🧠 Super AI Modes")
 mode = st.sidebar.radio("Choose a mode:", ["💬 Chat & Analyze", "🎨 Generate Image", "🌐 Web Search"])
 
-# Initialize chat history
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -107,7 +101,6 @@ elif mode == "🎨 Generate Image":
     if st.button("Generate Image"):
         if img_prompt:
             with st.spinner("Translating prompt and painting your image..."):
-                # বাংলা থাকলে ইংরেজিতে অনুবাদ করবে
                 english_prompt = translate_to_english(img_prompt)
                 safe_prompt = urllib.parse.quote(english_prompt)
                 image_url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width=1024&height=1024&nologo=true"
@@ -126,24 +119,28 @@ elif mode == "🌐 Web Search":
         if search_query:
             with st.spinner("Searching the web..."):
                 try:
-                    # ১. DuckDuckGo থেকে রেজাল্ট আনা
-                    results = DDGS().text(search_query, max_results=5)
-                    context = "\n\n".join([f"Title: {r['title']}\nSnippet: {r['body']}" for r in results])
+                    # DuckDuckGo সার্চ (নতুন উপায়ে)
+                    ddgs = DDGS()
+                    results = list(ddgs.text(search_query, max_results=5))
                     
-                    # ২. Groq-কে সরাসরি উত্তর দিতে বলা (কোনো টুল কল ছাড়া)
-                    system_prompt = f"You are a smart AI. Use the following web search results to answer the user's question. Be accurate and mention where the info came from if possible.\n\nSearch Results:\n{context}"
-                    
-                    response = groq_client.chat.completions.create(
-                        model="openai/gpt-oss-120b",
-                        messages=[
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": search_query}
-                        ],
-                        temperature=0.5,
-                        max_tokens=1000
-                    )
-                    st.markdown(response.choices[0].message.content)
+                    if not results:
+                        st.warning("DuckDuckGo সার্চ থেকে কোনো তথ্য পাওয়া যায়নি। অনুগ্রহ করে আবার চেষ্টা করুন।")
+                    else:
+                        context = "\n\n".join([f"Title: {r.get('title', '')}\nSnippet: {r.get('body', '')}" for r in results])
+                        
+                        system_prompt = f"You are a smart AI assistant. Based on the following live web search results, answer the user's question accurately. If the results don't contain the answer, say you don't know.\n\nSearch Results:\n{context}"
+                        
+                        response = groq_client.chat.completions.create(
+                            model="openai/gpt-oss-120b",
+                            messages=[
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user", "content": search_query}
+                            ],
+                            temperature=0.5,
+                            max_tokens=1000
+                        )
+                        st.markdown(response.choices[0].message.content)
                 except Exception as e:
-                    st.error(f"Search Error: {str(e)}")
+                    st.error(f"সার্চ করতে সমস্যা হচ্ছে: {str(e)}")
         else:
             st.warning("Please enter a search query.")
