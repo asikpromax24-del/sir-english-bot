@@ -11,8 +11,6 @@ import pandas as pd
 import plotly.express as px
 import json
 import hashlib
-import extra_streamlit_components as stx
-from datetime import datetime, timedelta
 from supabase import create_client, Client
 
 # ================= ১. পেজ কনফিগারেশন ও ডার্ক থিম =================
@@ -69,8 +67,12 @@ def login_user(email, password):
     return False
 
 def save_chat(email, session_name, messages):
-    supabase.table("chats").delete().eq("user_email", email).eq("session_name", session_name).execute()
-    supabase.table("chats").insert({"user_email": email, "session_name": session_name, "messages": messages}).execute()
+    # ডেটাবেসে চ্যাট সেভ করা
+    try:
+        supabase.table("chats").delete().eq("user_email", email).eq("session_name", session_name).execute()
+        supabase.table("chats").insert({"user_email": email, "session_name": session_name, "messages": messages}).execute()
+    except Exception as e:
+        print(f"Save Error: {e}")
 
 def load_chats(email):
     response = supabase.table("chats").select("session_name, messages").eq("user_email", email).execute()
@@ -102,22 +104,21 @@ def stream_groq_response(chat_history):
         if chunk.choices[0].delta.content:
             yield chunk.choices[0].delta.content
 
-# ================= ৫. কুকি ম্যানেজমেন্ট =================
-cookie_manager = stx.CookieManager(key="cookie_manager")
+# ================= ৫. অটো-লগইন সিস্টেম (Query Params) =================
 if "logged_in" not in st.session_state: st.session_state.logged_in = False
 if "user_email" not in st.session_state: st.session_state.user_email = ""
 
-if not st.session_state.logged_in:
-    saved_email = cookie_manager.get(cookie="sir_english_user")
-    if saved_email:
-        st.session_state.logged_in = True
-        st.session_state.user_email = saved_email
-        st.rerun()
+# URL-এ ইমেইল থাকলে অটোমেটিক লগইন হবে
+if not st.session_state.logged_in and "email" in st.query_params:
+    st.session_state.logged_in = True
+    st.session_state.user_email = st.query_params["email"]
+    st.rerun()
 
 # ================= ৬. লগইন ও সাইনআপ =================
 if not st.session_state.logged_in:
     st.title("🧠 Welcome to Super AI & Sir English")
     tab1, tab2 = st.tabs(["🔐 Login", "📝 Sign Up"])
+    
     with tab1:
         st.subheader("Login to your account")
         login_email = st.text_input("Email Address", key="login_email")
@@ -126,10 +127,10 @@ if not st.session_state.logged_in:
             if login_user(login_email, login_pass):
                 st.session_state.logged_in = True
                 st.session_state.user_email = login_email
-                expires = datetime.now() + timedelta(days=30)
-                cookie_manager.set("sir_english_user", login_email, expires_at=expires)
+                st.query_params["email"] = login_email # URL-এ ইমেইল সেভ করা হলো
                 st.rerun()
             else: st.error("Invalid Email or Password")
+
     with tab2:
         st.subheader("Create a new account")
         new_email = st.text_input("Email Address", key="new_email")
@@ -155,14 +156,14 @@ if st.session_state.user_email == ADMIN_EMAIL:
 if st.sidebar.button("Logout"):
     st.session_state.logged_in = False
     st.session_state.user_email = ""
-    cookie_manager.delete("sir_english_user")
+    st.query_params.clear() # URL থেকে ইমেইল মুছে ফেলা হলো
     st.rerun()
 
 app_mode = st.sidebar.radio("Select App Mode", ["🤖 Super AI (General)", "🎓 Sir English (Teacher)"])
 
-if "chat_sessions" not in st.session_state:
+# চ্যাট হিস্ট্রি লোড করা
+if "chat_sessions" not in st.session_state or st.session_state.get('user_email') != st.session_state.user_email:
     st.session_state.chat_sessions = load_chats(st.session_state.user_email)
-if "current_session" not in st.session_state:
     st.session_state.current_session = list(st.session_state.chat_sessions.keys())[0]
 
 if st.sidebar.button("➕ New Chat Session"):
@@ -205,6 +206,7 @@ if st.sidebar.button("🗑️ Clear Current Chat"):
 # ================= ৮. অ্যাপ লজিক =================
 if app_mode == "🎓 Sir English (Teacher)" and tool == "📝 Placement Test":
     st.title("📝 English Placement Test")
+    # ... (প্লেসমেন্ট টেস্টের আগের কোড)
     st.write("Answer these 5 questions. The AI will determine your CEFR level (A1 to C2).")
     q1 = st.text_input("1. What is the past tense of 'go'?")
     q2 = st.text_input("2. Write a sentence using 'because'.")
