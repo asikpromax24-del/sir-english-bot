@@ -8,7 +8,6 @@ import asyncio
 import io
 from langdetect import detect
 import pandas as pd
-from youtube_transcript_api import YouTubeTranscriptApi
 import plotly.express as px
 import re
 
