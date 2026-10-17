@@ -14,32 +14,20 @@ st.set_page_config(page_title="Super AI - Pro", page_icon="🧠", layout="wide")
 groq_client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
-# অডিও জেনারেট করার ফাংশন (সম্পূর্ণ অটোমেটিক)
+# অডিও জেনারেট করার ফাংশন (অটোমেটিক ডিটেকশন)
 def generate_audio_edge(text):
     try:
-        # ভাষা অটোমেটিক ডিটেক্ট করা
         lang = detect(text)
-        
-        # ভাষা অনুযায়ী ভয়েস ম্যাপিং
         voice_map = {
-            'bn': 'bn-BD-NabanitaNeural', # বাংলা
-            'en': 'en-US-AriaNeural',     # ইংরেজি
-            'ru': 'ru-RU-SvetlanaNeural', # রাশিয়ান
-            'ar': 'ar-SA-ZariyahNeural',  # আরবি
-            'hi': 'hi-IN-SwaraNeural',    # হিন্দি
-            'zh-cn': 'zh-CN-XiaoxiaoNeural', # চাইনিজ
-            'fr': 'fr-FR-DeniseNeural',   # ফ্রেঞ্চ
-            'es': 'es-ES-ElviraNeural',   # স্প্যানিশ
-            'de': 'de-DE-KatjaNeural',    # জার্মান
-            'ja': 'ja-JP-NanamiNeural',   # জাপানিজ
-            'ko': 'ko-KR-SunHiNeural',    # কোরিয়ান
-            'pt': 'pt-BR-FranciscaNeural',# পর্তুগিজ
-            'tr': 'tr-TR-EmelNeural',     # তুর্কি
-            'fa': 'fa-IR-DilaraNeural',   # ফারসি
-            'ur': 'ur-PK-UzmaNeural'      # উর্দু
+            'bn': 'bn-BD-NabanitaNeural', 'en': 'en-US-AriaNeural', 
+            'ru': 'ru-RU-SvetlanaNeural', 'ar': 'ar-SA-ZariyahNeural', 
+            'hi': 'hi-IN-SwaraNeural', 'zh-cn': 'zh-CN-XiaoxiaoNeural', 
+            'fr': 'fr-FR-DeniseNeural', 'es': 'es-ES-ElviraNeural', 
+            'de': 'de-DE-KatjaNeural', 'ja': 'ja-JP-NanamiNeural', 
+            'ko': 'ko-KR-SunHiNeural', 'pt': 'pt-BR-FranciscaNeural', 
+            'tr': 'tr-TR-EmelNeural', 'fa': 'fa-IR-DilaraNeural', 
+            'ur': 'ur-PK-UzmaNeural'
         }
-        
-        # যদি ভাষা খুঁজে না পাওয়া যায়, ডিফল্ট ইংরেজি
         voice = voice_map.get(lang, 'en-US-AriaNeural')
     except:
         voice = 'en-US-AriaNeural'
@@ -77,6 +65,7 @@ mode = st.sidebar.radio("Choose a mode:", ["💬 Chat & Analyze", "🎨 Generate
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+# চ্যাট হিস্ট্রি ডাউনলোড বাটন
 st.sidebar.markdown("---")
 if st.session_state.messages:
     chat_text = "\n\n".join([f"{m['role'].upper()}: {m['content']}" for m in st.session_state.messages])
@@ -90,9 +79,13 @@ if st.session_state.messages:
 if mode == "💬 Chat & Analyze":
     st.title("💬 Chat, Voice & File Analysis")
     
+    # পুরো চ্যাট হিস্ট্রি রেন্ডার করা
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
+            # কপি বাটন যোগ করা হলো
+            with st.expander("📋 Copy Response"):
+                st.code(message["content"], language="text")
 
     with st.expander("📁 Upload File or 🎤 Record Voice"):
         uploaded_file = st.file_uploader("Upload PDF or Image", type=["pdf", "png", "jpg", "jpeg"])
@@ -121,6 +114,8 @@ if mode == "💬 Chat & Analyze":
         st.session_state.messages.append({"role": "user", "content": user_text})
         with st.chat_message("user"):
             st.markdown(user_text)
+            with st.expander("📋 Copy Response"):
+                st.code(user_text, language="text")
 
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
@@ -136,7 +131,8 @@ if mode == "💬 Chat & Analyze":
                         ])
                         answer = response.text
                     else:
-                        chat_history = [{"role": "system", "content": "You are a super intelligent AI assistant. You teach, write code, translate, and answer everything accurately in the language the user uses."}] + [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages[-10:]]
+                        # মেমোরি বাড়ানো হলো: [-10:] থেকে [-20:] করা হলো
+                        chat_history = [{"role": "system", "content": "You are a super intelligent AI assistant. You teach, write code, translate, and answer everything accurately in the language the user uses."}] + [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages[-20:]]
                         response = groq_client.chat.completions.create(
                             model="openai/gpt-oss-120b",
                             messages=chat_history,
@@ -147,7 +143,11 @@ if mode == "💬 Chat & Analyze":
                     
                     st.markdown(answer)
                     
-                    # অটোমেটিক অডিও জেনারেট (কোনো ম্যানুয়াল সেটিং নেই)
+                    # কপি বাটন যোগ করা হলো
+                    with st.expander("📋 Copy Response"):
+                        st.code(answer, language="text")
+
+                    # অডিও জেনারেট করা
                     audio_data = generate_audio_edge(answer)
                     if audio_data:
                         st.audio(audio_data, format="audio/mp3")
@@ -220,6 +220,10 @@ elif mode == "🌐 Web Search":
                         final_answer = response.choices[0].message.content
                         st.markdown(final_answer)
                         
+                        # কপি বাটন
+                        with st.expander("📋 Copy Search Result"):
+                            st.code(final_answer, language="text")
+
                         audio_data = generate_audio_edge(final_answer)
                         if audio_data:
                             st.audio(audio_data, format="audio/mp3")
