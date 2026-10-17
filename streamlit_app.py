@@ -14,12 +14,39 @@ st.set_page_config(page_title="Super AI - Pro", page_icon="🧠", layout="wide")
 groq_client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
-# বাংলা লেখা আছে কি না চেক করার ফাংশন
-def is_bengali(text):
-    return bool(re.search(r'[\u0980-\u09FF]', text))
+# ভাষা ডিটেক্ট করার ফাংশন (Auto-Detect)
+def detect_language(text):
+    if re.search(r'[\u0980-\u09FF]', text): return 'bn' # বাংলা
+    elif re.search(r'[\u0600-\u06FF]', text): return 'ar' # আরবি
+    elif re.search(r'[\u0900-\u097F]', text): return 'hi' # হিন্দি
+    elif re.search(r'[\u4e00-\u9FFF]', text): return 'zh' # চাইনিজ
+    elif re.search(r'[a-zA-Z]', text): return 'en'      # ইংরেজি
+    else: return 'en'
 
 # অডিও জেনারেট করার নতুন ফাংশন (Edge TTS ব্যবহার করে)
-def generate_audio_edge(text, voice):
+def generate_audio_edge(text, voice_setting):
+    # যদি Auto-Detect সিলেক্ট করা থাকে
+    if voice_setting == "Auto-Detect (Smart)":
+        lang = detect_language(text)
+        voice_map = {
+            'bn': 'bn-BD-NabanitaNeural',
+            'ar': 'ar-SA-ZariyahNeural',
+            'hi': 'hi-IN-SwaraNeural',
+            'zh': 'zh-CN-XiaoxiaoNeural',
+            'en': 'en-US-AriaNeural'
+        }
+        voice = voice_map.get(lang, 'en-US-AriaNeural')
+    else:
+        # ম্যানুয়ালি সিলেক্ট করা ভয়েস
+        voice_mapping = {
+            "Nabanita (Female BD)": "bn-BD-NabanitaNeural",
+            "Pradeep (Male BD)": "bn-BD-PradeepNeural",
+            "Aria (English)": "en-US-AriaNeural",
+            "Zariyah (Arabic)": "ar-SA-ZariyahNeural",
+            "Swara (Hindi)": "hi-IN-SwaraNeural"
+        }
+        voice = voice_mapping.get(voice_setting, 'en-US-AriaNeural')
+
     async def _generate():
         communicate = edge_tts.Communicate(text, voice)
         audio_data = b""
@@ -55,16 +82,8 @@ st.sidebar.markdown("---")
 st.sidebar.subheader("🎙️ Voice Settings")
 voice_choice = st.sidebar.selectbox(
     "Select AI Voice",
-    ["Nabanita (Female BD)", "Pradeep (Male BD)", "Tanishaa (Female IN)", "Aria (English)"]
+    ["Auto-Detect (Smart)", "Nabanita (Female BD)", "Pradeep (Male BD)", "Aria (English)", "Zariyah (Arabic)", "Swara (Hindi)"]
 )
-
-voice_mapping = {
-    "Nabanita (Female BD)": "bn-BD-NabanitaNeural",
-    "Pradeep (Male BD)": "bn-BD-PradeepNeural",
-    "Tanishaa (Female IN)": "bn-IN-TanishaaNeural",
-    "Aria (English)": "en-US-AriaNeural"
-}
-selected_voice = voice_mapping[voice_choice]
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -128,7 +147,7 @@ if mode == "💬 Chat & Analyze":
                         ])
                         answer = response.text
                     else:
-                        chat_history = [{"role": "system", "content": "You are a super intelligent AI assistant. You teach English, write code, translate, and answer everything accurately."}] + [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages[-10:]]
+                        chat_history = [{"role": "system", "content": "You are a super intelligent AI assistant. You teach English, write code, translate, and answer everything accurately in the language the user uses."}] + [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages[-10:]]
                         response = groq_client.chat.completions.create(
                             model="openai/gpt-oss-120b",
                             messages=chat_history,
@@ -140,7 +159,7 @@ if mode == "💬 Chat & Analyze":
                     st.markdown(answer)
                     
                     # অডিও জেনারেট করা
-                    audio_data = generate_audio_edge(answer, selected_voice)
+                    audio_data = generate_audio_edge(answer, voice_choice)
                     if audio_data:
                         st.audio(audio_data, format="audio/mp3")
                         
@@ -150,7 +169,7 @@ if mode == "💬 Chat & Analyze":
 
 elif mode == "🎨 Generate Image":
     st.title("🎨 AI Image Generator")
-    st.write("Describe the image you want to create (English or Bengali).")
+    st.write("Describe the image you want to create (English, Bengali, Arabic, etc.).")
     
     img_prompt = st.text_input("Image Prompt:", placeholder="e.g., A beautiful sunset over a calm sea, digital art")
     
@@ -212,7 +231,7 @@ elif mode == "🌐 Web Search":
                         final_answer = response.choices[0].message.content
                         st.markdown(final_answer)
                         
-                        audio_data = generate_audio_edge(final_answer, selected_voice)
+                        audio_data = generate_audio_edge(final_answer, voice_choice)
                         if audio_data:
                             st.audio(audio_data, format="audio/mp3")
                             
