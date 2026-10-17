@@ -5,3 +5,4 @@ peft
 accelerate
 gdown==4.7.0
 bitsandbytes
+torchvision
