@@ -19,13 +19,7 @@ def is_bengali(text):
     return bool(re.search(r'[\u0980-\u09FF]', text))
 
 # অডিও জেনারেট করার নতুন ফাংশন (Edge TTS ব্যবহার করে)
-def generate_audio_edge(text):
-    # বাংলা নাকি ইংরেজি ভয়েস হবে তা নির্ধারণ
-    if is_bengali(text):
-        voice = 'bn-BD-NabanitaNeural' # বাংলা ফিমেল ভয়েস (খুব স্বাভাবিক)
-    else:
-        voice = 'en-US-AriaNeural'     # ইংরেজি ফিমেল ভয়েস
-
+def generate_audio_edge(text, voice):
     async def _generate():
         communicate = edge_tts.Communicate(text, voice)
         audio_data = b""
@@ -55,6 +49,22 @@ def translate_to_english(text):
 # Sidebar Menu
 st.sidebar.title("🧠 Super AI Modes")
 mode = st.sidebar.radio("Choose a mode:", ["💬 Chat & Analyze", "🎨 Generate Image", "🌐 Web Search"])
+
+# Voice Selector
+st.sidebar.markdown("---")
+st.sidebar.subheader("🎙️ Voice Settings")
+voice_choice = st.sidebar.selectbox(
+    "Select AI Voice",
+    ["Nabanita (Female BD)", "Pradeep (Male BD)", "Tanishaa (Female IN)", "Aria (English)"]
+)
+
+voice_mapping = {
+    "Nabanita (Female BD)": "bn-BD-NabanitaNeural",
+    "Pradeep (Male BD)": "bn-BD-PradeepNeural",
+    "Tanishaa (Female IN)": "bn-IN-TanishaaNeural",
+    "Aria (English)": "en-US-AriaNeural"
+}
+selected_voice = voice_mapping[voice_choice]
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -129,8 +139,8 @@ if mode == "💬 Chat & Analyze":
                     
                     st.markdown(answer)
                     
-                    # নতুন অডিও জেনারেটর ব্যবহার
-                    audio_data = generate_audio_edge(answer)
+                    # অডিও জেনারেট করা
+                    audio_data = generate_audio_edge(answer, selected_voice)
                     if audio_data:
                         st.audio(audio_data, format="audio/mp3")
                         
@@ -202,8 +212,7 @@ elif mode == "🌐 Web Search":
                         final_answer = response.choices[0].message.content
                         st.markdown(final_answer)
                         
-                        # নতুন অডিও জেনারেটর ব্যবহার
-                        audio_data = generate_audio_edge(final_answer)
+                        audio_data = generate_audio_edge(final_answer, selected_voice)
                         if audio_data:
                             st.audio(audio_data, format="audio/mp3")
                             
