@@ -55,12 +55,16 @@ custom_css = """
     }
     div[data-testid="stChatMessage"] th { background-color: #2B313A; }
     
-    /* ================= CHAT INPUT BOX FIX ================= */
-    /* চ্যাট ইনপুট বক্সের ব্যাকগ্রাউন্ড ডার্ক করা */
+    /* ================= CHAT INPUT BOX FIX (মেইন সমস্যা) ================= */
+    /* চ্যাট ইনপুট বক্সের ব্যাকগ্রাউন্ড কালো করা */
     div[data-testid="stChatInput"] {
         background-color: #1E232B !important;
         border-radius: 10px;
+    }
+    div[data-testid="stChatInput"] > div {
+        background-color: #1E232B !important;
         border: 1px solid #444 !important;
+        border-radius: 10px;
     }
     /* ইনপুট বক্সের ভেতরের লেখা সাদা করা */
     div[data-testid="stChatInput"] textarea {
@@ -72,7 +76,7 @@ custom_css = """
         color: #888 !important; 
     }
     
-    /* সাইডবারের ইনপুট/টেক্সট এরিয়ার লেখা ঠিক করা */
+    /* সাইডবারের টেক্সট এরিয়া (Custom Persona) ফিক্স */
     .stTextInput input, .stTextArea textarea {
         color: #FAFAFA !important;
         background-color: #1E232B !important;
@@ -88,7 +92,7 @@ st.markdown(custom_css, unsafe_allow_html=True)
 groq_client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
-# ২. ডেটাবেস সেটআপ (চ্যাট সেভ করার জন্য)
+# ২. ডেটাবেস সেটআপ
 def init_db():
     conn = sqlite3.connect('super_ai.db')
     c = conn.cursor()
@@ -115,7 +119,7 @@ def load_chats(username):
         sessions[row[0]] = json.loads(row[1])
     return sessions if sessions else {"Chat 1": []}
 
-# অডিও জেনারেটর (স্পিড কন্ট্রোলসহ)
+# অডিও জেনারেটর
 def generate_audio_edge(text, speed="+0%"):
     try:
         lang = detect(text)
@@ -191,7 +195,6 @@ voice_speed = st.sidebar.select_slider("Voice Speed", options=["-50%", "-25%", "
 
 # ================= মেইন অ্যাপ লজিক =================
 
-# ১. চ্যাট ও অ্যানালাইসিস
 if mode == "💬 Chat & Analyze":
     st.title("💬 Chat, Voice & Data Analysis")
     for message in current_messages:
@@ -232,9 +235,7 @@ if mode == "💬 Chat & Analyze":
                             results = list(DDGS().text(user_text, max_results=3))
                             if results: context = "\n".join([f"Snippet: {r['body']}" for r in results])
                         
-                        # এআই-কে পরিষ্কারভাবে উত্তর দিতে বলা
                         final_prompt = persona_prompt + context + "\n\nIMPORTANT: Always reply in clear, well-formatted text. If you need to use a table, use standard Markdown format. Do not create weird spacing or broken tables. Always reply in the language the user asked in."
-                        
                         chat_history = [{"role": "system", "content": final_prompt}] + [{"role": m["role"], "content": m["content"]} for m in current_messages[-20:]]
                         answer = groq_client.chat.completions.create(model="openai/gpt-oss-120b", messages=chat_history, temperature=0.7, max_tokens=1500).choices[0].message.content
                     
@@ -247,7 +248,6 @@ if mode == "💬 Chat & Analyze":
                         if audio_data: st.audio(audio_data, format="audio/mp3")
                 except Exception as e: st.error(f"Error: {str(e)}")
 
-# ২. ডেটা ভিজুয়ালাইজেশন
 elif mode == "📊 Data Visualization":
     st.title("📊 AI Data Visualization")
     csv_file = st.file_uploader("Upload CSV", type=["csv"])
@@ -267,7 +267,6 @@ elif mode == "📊 Data Visualization":
                         st.plotly_chart(local_vars['fig'], use_container_width=True)
                     except Exception as e: st.error(f"চার্ট তৈরিতে সমস্যা: {str(e)}")
 
-# ৩. ইমেজ জেনারেটর
 elif mode == "🎨 Image Generator":
     st.title("🎨 AI Image Generator")
     img_prompt = st.text_input("Image Prompt:")
