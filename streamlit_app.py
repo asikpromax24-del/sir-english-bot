@@ -9,10 +9,11 @@ import io
 from langdetect import detect
 import pandas as pd
 import plotly.express as px
-import re
 import sqlite3
 import json
 import hashlib
+import extra_streamlit_components as stx
+from datetime import datetime, timedelta
 
 # ================= ১. পেজ কনফিগারেশন ও ডার্ক থিম =================
 st.set_page_config(page_title="Super AI & Sir English", page_icon="🧠", layout="wide", initial_sidebar_state="expanded")
@@ -20,35 +21,29 @@ st.set_page_config(page_title="Super AI & Sir English", page_icon="🧠", layout
 custom_css = """
 <style>
     #MainMenu {visibility: hidden;} footer {visibility: hidden;} 
+    [data-testid="stToolbar"] {visibility: hidden;}
+    [data-testid="stDecoration"] {visibility: hidden;}
     header[data-testid="stHeader"] { background-color: transparent !important; }
     .stApp { background-color: #0E1117; color: #FAFAFA !important; }
-    
-    div[data-testid="stChatMessage"] { 
-        background-color: #1E232B; border-radius: 10px; padding: 15px; margin-bottom: 10px; color: #FAFAFA !important;
-    }
+    .block-container { padding-top: 1rem !important; padding-bottom: 6rem !important; padding-left: 1rem !important; padding-right: 1rem !important; max-width: 100% !important; }
+    div[data-testid="collapsedControl"] { color: #FAFAFA !important; background-color: #1E232B !important; border-radius: 5px; padding: 5px; }
+    div[data-testid="collapsedControl"] svg { fill: #FAFAFA !important; }
+    div[data-testid="stChatMessage"] { background-color: #1E232B; border-radius: 10px; padding: 15px; margin-bottom: 10px; color: #FAFAFA !important; }
     div[data-testid="stChatMessage"] p, div[data-testid="stChatMessage"] li, div[data-testid="stChatMessage"] span,
     div[data-testid="stChatMessage"] h1, div[data-testid="stChatMessage"] h2, div[data-testid="stChatMessage"] h3,
     div[data-testid="stChatMessage"] strong { color: #FAFAFA !important; }
     div[data-testid="stChatMessage"] table { border-collapse: collapse; width: 100%; margin: 10px 0; }
     div[data-testid="stChatMessage"] th, div[data-testid="stChatMessage"] td { color: #FAFAFA !important; border: 1px solid #555 !important; padding: 8px; }
-    
     div[data-testid="stChatInput"] { background-color: #1E232B !important; border-radius: 10px; }
     div[data-testid="stChatInput"] > div { background-color: #1E232B !important; border: 1px solid #444 !important; border-radius: 10px; }
     div[data-testid="stChatInput"] textarea { color: #FAFAFA !important; background-color: transparent !important; }
     div[data-testid="stChatInput"] textarea::placeholder { color: #888 !important; }
     div[data-testid="stChatInput"] button { background-color: #2B313A !important; border-radius: 5px !important; }
     div[data-testid="stChatInput"] button svg { fill: #FAFAFA !important; }
-    
-    div[data-testid="stTextInput"] input, div[data-testid="stTextArea"] textarea {
-        color: #FAFAFA !important; background-color: #1E232B !important; border: 1px solid #555 !important;
-    }
+    div[data-testid="stTextInput"] input, div[data-testid="stTextArea"] textarea { color: #FAFAFA !important; background-color: #1E232B !important; border: 1px solid #555 !important; }
     div[data-testid="stTextInput"] label, div[data-testid="stTextArea"] label, div[data-testid="stSelectbox"] label { color: #FAFAFA !important; }
-    
-    .stButton > button {
-        color: #FAFAFA !important; background-color: #2B313A !important; border: 1px solid #555 !important; width: 100%;
-    }
+    .stButton > button { color: #FAFAFA !important; background-color: #2B313A !important; border: 1px solid #555 !important; width: 100%; }
     .stButton > button:hover { background-color: #444 !important; border: 1px solid #FAFAFA !important; }
-    
     section[data-testid="stSidebar"] { background-color: #0E1117; border-right: 1px solid #333; }
     section[data-testid="stSidebar"] p, section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] h2, section[data-testid="stSidebar"] h3 { color: #FAFAFA !important; }
     .streamlit-expanderHeader { color: #FAFAFA !important; }
@@ -60,24 +55,20 @@ st.markdown(custom_css, unsafe_allow_html=True)
 groq_client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
-# ================= ৩. ডেটাবেস সেটআপ (ইউজার ও চ্যাট) =================
+# ================= ৩. ডেটাবেস সেটআপ =================
 def init_db():
     conn = sqlite3.connect('super_ai.db')
     c = conn.cursor()
-    # ইউজার টেবিল (ইমেইল এবং হ্যাশ করা পাসওয়ার্ড)
     c.execute('''CREATE TABLE IF NOT EXISTS users (email TEXT PRIMARY KEY, password TEXT)''')
-    # চ্যাট টেবিল (ইউজারের ইমেইল দিয়ে চ্যাট সেভ হবে)
     c.execute('''CREATE TABLE IF NOT EXISTS chats (user_email TEXT, session_name TEXT, messages TEXT)''')
     conn.commit()
     return conn
 
 conn = init_db()
 
-# পাসওয়ার্ড হ্যাশ করার ফাংশন (সিকিউরিটির জন্য)
 def make_hashes(password):
     return hashlib.sha256(str.encode(password)).hexdigest()
 
-# নতুন ইউজার তৈরি
 def create_user(email, password):
     c = conn.cursor()
     try:
@@ -85,9 +76,8 @@ def create_user(email, password):
         conn.commit()
         return True
     except sqlite3.IntegrityError:
-        return False # ইমেইল আগে থেকেই আছে
+        return False
 
-# লগইন চেক
 def login_user(email, password):
     c = conn.cursor()
     c.execute("SELECT password FROM users WHERE email=?", (email,))
@@ -137,14 +127,26 @@ def stream_groq_response(chat_history):
         if chunk.choices[0].delta.content:
             yield chunk.choices[0].delta.content
 
-# ================= ৫. লগইন ও সাইনআপ সিস্টেম =================
-if "logged_in" not in st.session_state: st.session_state.logged_in = False
-if "user_email" not in st.session_state: st.session_state.user_email = ""
+# ================= ৫. কুকি ম্যানেজমেন্ট (লগইন মনে রাখার জন্য) =================
+cookie_manager = stx.CookieManager(key="cookie_manager")
 
+if "logged_in" not in st.session_state: 
+    st.session_state.logged_in = False
+if "user_email" not in st.session_state: 
+    st.session_state.user_email = ""
+
+# পেজ লোড হওয়ার সময় কুকি চেক করা (যদি আগে লগইন করা থাকে)
+if not st.session_state.logged_in:
+    saved_email = cookie_manager.get(cookie="sir_english_user")
+    if saved_email:
+        st.session_state.logged_in = True
+        st.session_state.user_email = saved_email
+        st.rerun()
+
+# ================= ৬. লগইন ও সাইনআপ পেজ =================
 if not st.session_state.logged_in:
     st.title("🧠 Welcome to Super AI & Sir English")
     
-    # ট্যাব ব্যবহার করে লগইন এবং সাইনআপ অপশন
     tab1, tab2 = st.tabs(["🔐 Login", "📝 Sign Up"])
     
     with tab1:
@@ -155,6 +157,9 @@ if not st.session_state.logged_in:
             if login_user(login_email, login_pass):
                 st.session_state.logged_in = True
                 st.session_state.user_email = login_email
+                # কুকি সেভ করা (৩০ দিনের জন্য)
+                expires = datetime.now() + timedelta(days=30)
+                cookie_manager.set("sir_english_user", login_email, expires_at=expires)
                 st.rerun()
             else:
                 st.error("Invalid Email or Password")
@@ -162,7 +167,7 @@ if not st.session_state.logged_in:
     with tab2:
         st.subheader("Create a new account")
         new_email = st.text_input("Email Address", key="new_email")
-        new_pass = st.text_input("Password", type="password", key="new_pass")
+        new_pass = st.text_input("Password (Min 6 characters)", type="password", key="new_pass")
         if st.button("Sign Up"):
             if len(new_pass) < 6:
                 st.warning("Password must be at least 6 characters long.")
@@ -171,13 +176,12 @@ if not st.session_state.logged_in:
                     st.success("Account created successfully! Please go to the Login tab.")
                 else:
                     st.error("This email is already registered.")
-    st.stop() # লগইন না করা পর্যন্ত নিচের কোড চলবে না
+    st.stop()
 
-# ================= ৬. মেইন অ্যাপ (লগইন করার পর) =================
+# ================= ৭. মেইন অ্যাপ (লগইন করার পর) =================
 st.sidebar.title("🧠 Super AI & Sir English")
-st.sidebar.success(f"Logged in as: {st.session_state.user_email}")
+st.sidebar.success(f"Logged in as:\n{st.session_state.user_email}")
 
-# অ্যাডমিন চেক (আপনার ইমেইল Secrets থেকে আসবে)
 ADMIN_EMAIL = st.secrets.get("ADMIN_EMAIL", "admin@admin.com")
 if st.session_state.user_email == ADMIN_EMAIL:
     st.sidebar.markdown("---")
@@ -192,12 +196,11 @@ if st.session_state.user_email == ADMIN_EMAIL:
 if st.sidebar.button("Logout"):
     st.session_state.logged_in = False
     st.session_state.user_email = ""
+    cookie_manager.delete("sir_english_user") # কুকি ডিলিট করা
     st.rerun()
 
-# মোড সিলেকশন
 app_mode = st.sidebar.radio("Select App Mode", ["🤖 Super AI (General)", "🎓 Sir English (Teacher)"])
 
-# চ্যাট সেশন ম্যানেজমেন্ট
 if "chat_sessions" not in st.session_state:
     st.session_state.chat_sessions = load_chats(st.session_state.user_email)
 if "current_session" not in st.session_state:
@@ -213,7 +216,6 @@ session_list = list(st.session_state.chat_sessions.keys())
 st.session_state.current_session = st.sidebar.selectbox("Select Chat History", session_list, index=session_list.index(st.session_state.current_session))
 current_messages = st.session_state.chat_sessions[st.session_state.current_session]
 
-# সেটিংস
 st.sidebar.markdown("---")
 st.sidebar.subheader("⚙️ Settings")
 
@@ -234,7 +236,7 @@ if st.sidebar.button("🗑️ Clear Current Chat"):
     save_chat(st.session_state.user_email, st.session_state.current_session, [])
     st.rerun()
 
-# ================= ৭. অ্যাপ লজিক (আগের মতোই) =================
+# ================= ৮. অ্যাপ লজিক =================
 if app_mode == "🎓 Sir English (Teacher)" and tool == "📝 Placement Test":
     st.title("📝 English Placement Test")
     st.write("Answer these 5 questions. The AI will determine your CEFR level (A1 to C2).")
