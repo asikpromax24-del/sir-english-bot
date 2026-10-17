@@ -16,37 +16,64 @@ import extra_streamlit_components as stx
 from datetime import datetime, timedelta
 
 # ================= ১. পেজ কনফিগারেশন ও ডার্ক থিম =================
-st.set_page_config(page_title="Super AI & Sir English", page_icon="🧠", layout="wide", initial_sidebar_state="expanded")
+# initial_sidebar_state="collapsed" দিলে মোবাইলে মেনু আইকনটা সবসময় দৃশ্যমান থাকে
+st.set_page_config(page_title="Super AI & Sir English", page_icon="🧠", layout="wide", initial_sidebar_state="collapsed")
 
 custom_css = """
 <style>
-    #MainMenu {visibility: hidden;} footer {visibility: hidden;} 
-    [data-testid="stToolbar"] {visibility: hidden;}
-    [data-testid="stDecoration"] {visibility: hidden;}
-    header[data-testid="stHeader"] { background-color: transparent !important; }
+    /* শুধু মেইন মেনু এবং ফুটার হাইড করা হলো, হেডার বা টুলবার নয় */
+    #MainMenu {visibility: hidden;} 
+    footer {visibility: hidden;} 
+    
+    /* ব্যাকগ্রাউন্ড ডার্ক করা */
     .stApp { background-color: #0E1117; color: #FAFAFA !important; }
     .block-container { padding-top: 1rem !important; padding-bottom: 6rem !important; padding-left: 1rem !important; padding-right: 1rem !important; max-width: 100% !important; }
-    div[data-testid="collapsedControl"] { color: #FAFAFA !important; background-color: #1E232B !important; border-radius: 5px; padding: 5px; }
-    div[data-testid="collapsedControl"] svg { fill: #FAFAFA !important; }
-    div[data-testid="stChatMessage"] { background-color: #1E232B; border-radius: 10px; padding: 15px; margin-bottom: 10px; color: #FAFAFA !important; }
+    
+    /* ================= মেনুবার (Sidebar) আইকন ফিক্স ================= */
+    /* উপরে বাম দিকের মেনু বাটনকে জোর করে দৃশ্যমান করা */
+    [data-testid="collapsedControl"] {
+        display: flex !important;
+        visibility: visible !important;
+        color: #FAFAFA !important;
+        background-color: #1E232B !important; 
+        border: 1px solid #444 !important;
+        border-radius: 5px !important;
+        margin-top: 10px !important;
+        margin-left: 10px !important;
+        z-index: 99999 !important;
+    }
+    [data-testid="collapsedControl"] svg {
+        fill: #FAFAFA !important;
+    }
+    
+    /* চ্যাট মেসেজ ডিজাইন */
+    div[data-testid="stChatMessage"] { 
+        background-color: #1E232B; border-radius: 10px; padding: 15px; margin-bottom: 10px; color: #FAFAFA !important;
+    }
     div[data-testid="stChatMessage"] p, div[data-testid="stChatMessage"] li, div[data-testid="stChatMessage"] span,
     div[data-testid="stChatMessage"] h1, div[data-testid="stChatMessage"] h2, div[data-testid="stChatMessage"] h3,
     div[data-testid="stChatMessage"] strong { color: #FAFAFA !important; }
     div[data-testid="stChatMessage"] table { border-collapse: collapse; width: 100%; margin: 10px 0; }
     div[data-testid="stChatMessage"] th, div[data-testid="stChatMessage"] td { color: #FAFAFA !important; border: 1px solid #555 !important; padding: 8px; }
+    
+    /* চ্যাট ইনপুট বক্স ফিক্স */
     div[data-testid="stChatInput"] { background-color: #1E232B !important; border-radius: 10px; }
     div[data-testid="stChatInput"] > div { background-color: #1E232B !important; border: 1px solid #444 !important; border-radius: 10px; }
     div[data-testid="stChatInput"] textarea { color: #FAFAFA !important; background-color: transparent !important; }
     div[data-testid="stChatInput"] textarea::placeholder { color: #888 !important; }
     div[data-testid="stChatInput"] button { background-color: #2B313A !important; border-radius: 5px !important; }
     div[data-testid="stChatInput"] button svg { fill: #FAFAFA !important; }
-    div[data-testid="stTextInput"] input, div[data-testid="stTextArea"] textarea { color: #FAFAFA !important; background-color: #1E232B !important; border: 1px solid #555 !important; }
+    
+    /* ইনপুট বক্স এবং বাটন ডিজাইন */
+    div[data-testid="stTextInput"] input, div[data-testid="stTextArea"] textarea {
+        color: #FAFAFA !important; background-color: #1E232B !important; border: 1px solid #555 !important;
+    }
     div[data-testid="stTextInput"] label, div[data-testid="stTextArea"] label, div[data-testid="stSelectbox"] label { color: #FAFAFA !important; }
     .stButton > button { color: #FAFAFA !important; background-color: #2B313A !important; border: 1px solid #555 !important; width: 100%; }
     .stButton > button:hover { background-color: #444 !important; border: 1px solid #FAFAFA !important; }
+    
     section[data-testid="stSidebar"] { background-color: #0E1117; border-right: 1px solid #333; }
     section[data-testid="stSidebar"] p, section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] h2, section[data-testid="stSidebar"] h3 { color: #FAFAFA !important; }
-    .streamlit-expanderHeader { color: #FAFAFA !important; }
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
@@ -127,15 +154,12 @@ def stream_groq_response(chat_history):
         if chunk.choices[0].delta.content:
             yield chunk.choices[0].delta.content
 
-# ================= ৫. কুকি ম্যানেজমেন্ট (লগইন মনে রাখার জন্য) =================
+# ================= ৫. কুকি ম্যানেজমেন্ট =================
 cookie_manager = stx.CookieManager(key="cookie_manager")
 
-if "logged_in" not in st.session_state: 
-    st.session_state.logged_in = False
-if "user_email" not in st.session_state: 
-    st.session_state.user_email = ""
+if "logged_in" not in st.session_state: st.session_state.logged_in = False
+if "user_email" not in st.session_state: st.session_state.user_email = ""
 
-# পেজ লোড হওয়ার সময় কুকি চেক করা (যদি আগে লগইন করা থাকে)
 if not st.session_state.logged_in:
     saved_email = cookie_manager.get(cookie="sir_english_user")
     if saved_email:
@@ -157,7 +181,6 @@ if not st.session_state.logged_in:
             if login_user(login_email, login_pass):
                 st.session_state.logged_in = True
                 st.session_state.user_email = login_email
-                # কুকি সেভ করা (৩০ দিনের জন্য)
                 expires = datetime.now() + timedelta(days=30)
                 cookie_manager.set("sir_english_user", login_email, expires_at=expires)
                 st.rerun()
@@ -178,7 +201,7 @@ if not st.session_state.logged_in:
                     st.error("This email is already registered.")
     st.stop()
 
-# ================= ৭. মেইন অ্যাপ (লগইন করার পর) =================
+# ================= ৭. মেইন অ্যাপ =================
 st.sidebar.title("🧠 Super AI & Sir English")
 st.sidebar.success(f"Logged in as:\n{st.session_state.user_email}")
 
@@ -196,7 +219,7 @@ if st.session_state.user_email == ADMIN_EMAIL:
 if st.sidebar.button("Logout"):
     st.session_state.logged_in = False
     st.session_state.user_email = ""
-    cookie_manager.delete("sir_english_user") # কুকি ডিলিট করা
+    cookie_manager.delete("sir_english_user")
     st.rerun()
 
 app_mode = st.sidebar.radio("Select App Mode", ["🤖 Super AI (General)", "🎓 Sir English (Teacher)"])
