@@ -4,12 +4,28 @@ import google.generativeai as genai
 from duckduckgo_search import DDGS
 import urllib.parse
 import os
+import streamlit.components.v1 as components
 
+# Streamlit-এর কানেকশন টাইমআউট কমানোর ট্রিক
 st.set_page_config(page_title="Super AI - Pro", page_icon="🧠", layout="wide")
 
 # API Clients
 groq_client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+
+# বাংলা থেকে ইংরেজি অনুবাদ করার ফাংশন (ছবি তৈরির জন্য)
+def translate_to_english(text):
+    prompt = f"Translate the following Bengali or mixed text into a detailed English image generation prompt. Only output the English translation, nothing else:\n\n{text}"
+    try:
+        response = groq_client.chat.completions.create(
+            model="openai/gpt-oss-120b",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=200
+        )
+        return response.choices[0].message.content.strip()
+    except:
+        return text # অনুবাদ ব্যর্থ হলে আসল টেক্সটই পাঠাবে
 
 # Sidebar Menu
 st.sidebar.title("🧠 Super AI Modes")
@@ -22,28 +38,23 @@ if "messages" not in st.session_state:
 if mode == "💬 Chat & Analyze":
     st.title("💬 Chat, Voice & File Analysis")
     
-    # Display chat history
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    # File Uploader & Audio Input
     with st.expander("📁 Upload File or 🎤 Record Voice"):
         uploaded_file = st.file_uploader("Upload PDF or Image", type=["pdf", "png", "jpg", "jpeg"])
         audio_value = st.audio_input("Record a voice message")
 
-    # Chat Input
     prompt = st.chat_input("Type your prompt here...")
 
     if prompt or audio_value:
         user_text = prompt
         
-        # Handle Audio (Speech to Text via Groq)
         if audio_value:
             st.info("Transcribing audio...")
             with open("temp_audio.wav", "wb") as f:
                 f.write(audio_value.getbuffer())
-            
             with open("temp_audio.wav", "rb") as f:
                 transcription = groq_client.audio.transcriptions.create(
                     file=("temp_audio.wav", f.read()),
@@ -63,7 +74,6 @@ if mode == "💬 Chat & Analyze":
             with st.spinner("Thinking..."):
                 try:
                     if uploaded_file:
-                        # File Analysis via Gemini
                         gemini_model = genai.GenerativeModel('gemini-3.8-flash')
                         file_bytes = uploaded_file.getvalue()
                         mime_type = uploaded_file.type
@@ -74,7 +84,6 @@ if mode == "💬 Chat & Analyze":
                         ])
                         answer = response.text
                     else:
-                        # Normal Chat via Groq
                         chat_history = [{"role": "system", "content": "You are a super intelligent AI assistant. You teach English, write code, translate, and answer everything accurately."}] + [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages[-10:]]
                         response = groq_client.chat.completions.create(
                             model="openai/gpt-oss-120b",
@@ -91,17 +100,19 @@ if mode == "💬 Chat & Analyze":
 
 elif mode == "🎨 Generate Image":
     st.title("🎨 AI Image Generator")
-    st.write("Describe the image you want to create.")
+    st.write("Describe the image you want to create (English or Bengali).")
     
     img_prompt = st.text_input("Image Prompt:", placeholder="e.g., A beautiful sunset over a calm sea, digital art")
     
     if st.button("Generate Image"):
         if img_prompt:
-            with st.spinner("Painting your image..."):
-                # Using Pollinations AI (Free, No API key needed)
-                safe_prompt = urllib.parse.quote(img_prompt)
+            with st.spinner("Translating prompt and painting your image..."):
+                # বাংলা থাকলে ইংরেজিতে অনুবাদ করবে
+                english_prompt = translate_to_english(img_prompt)
+                safe_prompt = urllib.parse.quote(english_prompt)
                 image_url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width=1024&height=1024&nologo=true"
-                st.image(image_url, caption=img_prompt, use_container_width=True)
+                
+                st.image(image_url, caption=f"Generated from: {english_prompt}", use_container_width=True)
         else:
             st.warning("Please enter a prompt first.")
 
@@ -115,11 +126,11 @@ elif mode == "🌐 Web Search":
         if search_query:
             with st.spinner("Searching the web..."):
                 try:
-                    # Search DuckDuckGo
+                    # ১. DuckDuckGo থেকে রেজাল্ট আনা
                     results = DDGS().text(search_query, max_results=5)
                     context = "\n\n".join([f"Title: {r['title']}\nSnippet: {r['body']}" for r in results])
                     
-                    # Summarize with Groq
+                    # ২. Groq-কে সরাসরি উত্তর দিতে বলা (কোনো টুল কল ছাড়া)
                     system_prompt = f"You are a smart AI. Use the following web search results to answer the user's question. Be accurate and mention where the info came from if possible.\n\nSearch Results:\n{context}"
                     
                     response = groq_client.chat.completions.create(
