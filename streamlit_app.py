@@ -120,21 +120,31 @@ elif mode == "🌐 Web Search":
             with st.spinner("Searching the web..."):
                 try:
                     from ddgs import DDGS
+                    
+                    # ১. প্রথমে এআই-কে দিয়ে বাংলা প্রশ্নটাকে ইংরেজি সার্চ কি-ওয়ার্ডে অনুবাদ করানো হচ্ছে
+                    opt_prompt = f"Extract the best English search engine keywords from this query. Output ONLY the keywords, nothing else.\nQuery: {search_query}"
+                    opt_response = groq_client.chat.completions.create(
+                        model="openai/gpt-oss-120b",
+                        messages=[{"role": "user", "content": opt_prompt}],
+                        temperature=0.1,
+                        max_tokens=50
+                    )
+                    optimized_query = opt_response.choices[0].message.content.strip()
+                    
+                    # ২. ইংরেজি কি-ওয়ার্ড দিয়ে DuckDuckGo সার্চ
                     ddgs = DDGS()
-                    
-                    # নতুন ddgs লাইব্রেরি দিয়ে সার্চ
-                    results = list(ddgs.text(search_query, max_results=5))
-                    
-                    # যদি সাধারণ সার্চে কিছু না পাওয়া যায়, তবে নিউজ সার্চ করবে
-                    if not results:
-                        results = list(ddgs.news(search_query, max_results=5))
+                    results = list(ddgs.text(optimized_query, max_results=5))
                     
                     if not results:
-                        st.warning("সার্চ ইঞ্জিন থেকে কোনো তথ্য পাওয়া যায়নি। অনুগ্রহ করে অন্য কোনো প্রশ্ন লিখে চেষ্টা করুন।")
+                        results = list(ddgs.news(optimized_query, max_results=5))
+                    
+                    if not results:
+                        st.warning(f"সার্চ ইঞ্জিন থেকে কোনো তথ্য পাওয়া যায়নি (Optimized Keyword: '{optimized_query}')। অনুগ্রহ করে অন্য কিছু চেষ্টা করুন।")
                     else:
                         context = "\n\n".join([f"Title: {r.get('title', '')}\nSnippet: {r.get('body', '')}" for r in results])
                         
-                        system_prompt = f"You are a smart AI assistant. Based on the following live web search results, answer the user's question accurately. If the results don't contain the answer, say 'I couldn't find the specific answer in the latest web results.'\n\nSearch Results:\n{context}"
+                        # ৩. সার্চ রেজাল্ট থেকে এআই-কে দিয়ে ফাইনাল উত্তর তৈরি করানো হচ্ছে
+                        system_prompt = f"You are a smart AI assistant. Based on the following live web search results, answer the user's question accurately. The user's original question was: '{search_query}'.\n\nSearch Results:\n{context}"
                         
                         response = groq_client.chat.completions.create(
                             model="openai/gpt-oss-120b",
