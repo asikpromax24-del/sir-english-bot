@@ -2,8 +2,8 @@ streamlit
 groq
 google-generativeai
 ddgs
-requests
 edge-tts
 langdetect
 pandas
 plotly
+extra-streamlit-components
