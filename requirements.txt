@@ -7,4 +7,3 @@ edge-tts
 langdetect
 pandas
 plotly
-yt-dlp
