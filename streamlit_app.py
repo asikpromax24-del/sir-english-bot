@@ -13,12 +13,12 @@ import re
 import sqlite3
 import json
 
-# ১. পেজ কনফিগারেশন ও ডার্ক থিম
-st.set_page_config(page_title="Super AI Pro", page_icon="🧠", layout="wide", initial_sidebar_state="collapsed")
+# ================= ১. পেজ কনফিগারেশন ও ডার্ক থিম =================
+st.set_page_config(page_title="Super AI & Sir English", page_icon="🧠", layout="wide", initial_sidebar_state="expanded")
 
 custom_css = """
 <style>
-    #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
+    #MainMenu {visibility: hidden;} footer {visibility: hidden;} 
     .stApp { background-color: #0E1117; color: #FAFAFA !important; }
     
     /* চ্যাট মেসেজ ডিজাইন */
@@ -26,7 +26,8 @@ custom_css = """
         background-color: #1E232B; border-radius: 10px; padding: 15px; margin-bottom: 10px; color: #FAFAFA !important;
     }
     div[data-testid="stChatMessage"] p, div[data-testid="stChatMessage"] li, div[data-testid="stChatMessage"] span,
-    div[data-testid="stChatMessage"] h1, div[data-testid="stChatMessage"] h2, div[data-testid="stChatMessage"] h3 { 
+    div[data-testid="stChatMessage"] h1, div[data-testid="stChatMessage"] h2, div[data-testid="stChatMessage"] h3,
+    div[data-testid="stChatMessage"] strong { 
         color: #FAFAFA !important; 
     }
     div[data-testid="stChatMessage"] table { border-collapse: collapse; width: 100%; margin: 10px 0; }
@@ -39,46 +40,40 @@ custom_css = """
     div[data-testid="stChatInput"] textarea::placeholder { color: #888 !important; }
     div[data-testid="stChatInput"] button { background-color: #2B313A !important; border-radius: 5px !important; }
     div[data-testid="stChatInput"] button svg { fill: #FAFAFA !important; }
+    
+    /* সাইডবার স্টাইল */
+    section[data-testid="stSidebar"] { background-color: #0E1117; border-right: 1px solid #333; }
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
 
-# API Clients
+# ================= ২. API Clients & DB Setup =================
 groq_client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
-# ================= ডেটাবেস সেটআপ =================
 def init_db():
     conn = sqlite3.connect('super_ai.db')
     c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS chats (session_name TEXT, messages TEXT)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS chats (username TEXT, session_name TEXT, messages TEXT)''')
     conn.commit()
     return conn
 
 conn = init_db()
 
-def save_chat(session_name, messages):
+def save_chat(username, session_name, messages):
     c = conn.cursor()
-    messages_json = json.dumps(messages)
-    c.execute("DELETE FROM chats WHERE session_name=?", (session_name,))
-    c.execute("INSERT INTO chats (session_name, messages) VALUES (?, ?)", (session_name, messages_json))
+    c.execute("DELETE FROM chats WHERE username=? AND session_name=?", (username, session_name))
+    c.execute("INSERT INTO chats (username, session_name, messages) VALUES (?, ?, ?)", (username, session_name, json.dumps(messages)))
     conn.commit()
 
-def load_chats():
+def load_chats(username):
     c = conn.cursor()
-    c.execute("SELECT session_name, messages FROM chats")
+    c.execute("SELECT session_name, messages FROM chats WHERE username=?", (username,))
     rows = c.fetchall()
-    sessions = {}
-    for row in rows:
-        sessions[row[0]] = json.loads(row[1])
+    sessions = {row[0]: json.loads(row[1]) for row in rows}
     return sessions if sessions else {"Chat 1": []}
 
-def delete_chat_session(session_name):
-    c = conn.cursor()
-    c.execute("DELETE FROM chats WHERE session_name=?", (session_name,))
-    conn.commit()
-
-# ================= অডিও জেনারেটর =================
+# ================= ৩. ফাংশনসমূহ (Audio, Stream) =================
 def generate_audio_edge(text, speed="+0%"):
     try:
         lang = detect(text)
@@ -98,7 +93,6 @@ def generate_audio_edge(text, speed="+0%"):
         return io.BytesIO(loop.run_until_complete(_generate()))
     except: return None
 
-# ================= লাইভ টাইপিং ফাংশন =================
 def stream_groq_response(chat_history):
     stream = groq_client.chat.completions.create(
         model="openai/gpt-oss-120b", messages=chat_history, temperature=0.7, max_tokens=1500, stream=True
@@ -107,99 +101,134 @@ def stream_groq_response(chat_history):
         if chunk.choices[0].delta.content:
             yield chunk.choices[0].delta.content
 
-# ================= মেইন অ্যাপ =================
-st.title("🧠 Super AI Pro")
+# ================= ৪. ইউজার অথেনটিকেশন (লগইন) =================
+if "logged_in" not in st.session_state: st.session_state.logged_in = False
+if "username" not in st.session_state: st.session_state.username = ""
 
-# সেশন ম্যানেজমেন্ট
+if not st.session_state.logged_in:
+    st.title("🔐 Welcome to Super AI & Sir English")
+    st.markdown("Please log in to continue.")
+    user = st.text_input("Username (e.g., admin)")
+    pwd = st.text_input("Password (Demo: **admin123**)", type="password")
+    if st.button("Login", use_container_width=True):
+        if user and pwd == "admin123":
+            st.session_state.logged_in = True
+            st.session_state.username = user
+            st.rerun()
+        else: st.error("Wrong Username or Password!")
+    st.stop()
+
+# ================= ৫. সাইডবার ও নেভিগেশন =================
+st.sidebar.title("🧠 Navigation")
+st.sidebar.success(f"User: {st.session_state.username}")
+if st.sidebar.button("Logout", use_container_width=True):
+    st.session_state.logged_in = False
+    st.rerun()
+
+# মোড সিলেকশন
+app_mode = st.sidebar.radio("Select App Mode", ["🤖 Super AI (General)", "🎓 Sir English (Teacher)"])
+
+# চ্যাট সেশন ম্যানেজমেন্ট (সাইডবারে)
 if "chat_sessions" not in st.session_state:
-    st.session_state.chat_sessions = load_chats()
+    st.session_state.chat_sessions = load_chats(st.session_state.username)
 if "current_session" not in st.session_state:
     st.session_state.current_session = list(st.session_state.chat_sessions.keys())[0]
 
-# ⚙️ সেটিংস ও টুলস
-with st.expander("⚙️ Settings & Tools", expanded=False):
-    col1, col2 = st.columns(2)
-    with col1:
-        mode = st.selectbox("Choose Tool", ["💬 Chat & Analyze", "🎨 Image Generator", "📊 Data Visualization"])
-    with col2:
-        persona_choice = st.selectbox("AI Persona", ["General Assistant", "Strict English Teacher", "Expert Python Coder"])
-        persona_prompts = {"General Assistant": "You are a super intelligent AI assistant.", "Strict English Teacher": "You are a strict English teacher.", "Expert Python Coder": "You are a senior Python developer."}
-        persona_prompt = persona_prompts[persona_choice]
-    
-    auto_search = st.checkbox("🌐 Enable Auto Web Search")
-    enable_voice = st.checkbox("🔊 Enable Auto Voice Output", value=True)
-    voice_speed = st.select_slider("Voice Speed", options=["-50%", "-25%", "+0%", "+25%", "+50%"], value="+0%")
+if st.sidebar.button("➕ New Chat Session", use_container_width=True):
+    new_chat_id = f"Chat {len(st.session_state.chat_sessions) + 1}"
+    st.session_state.chat_sessions[new_chat_id] = []
+    st.session_state.current_session = new_chat_id
+    st.rerun()
 
-# 🗂️ চ্যাট লিস্ট (সরাসরি বাটন আকারে)
-st.write("**🗂️ Your Chats:**")
-colA, colB = st.columns([1, 2])
-with colA:
-    if st.button("➕ New Chat", use_container_width=True):
-        new_chat_id = f"Chat {len(st.session_state.chat_sessions) + 1}"
-        st.session_state.chat_sessions[new_chat_id] = []
-        st.session_state.current_session = new_chat_id
-        st.rerun()
-
-# চ্যাট সেশন বাটনগুলো এবং ডিলিট অপশন
-session_keys = list(st.session_state.chat_sessions.keys())
-cols = st.columns(3)
-for i, session_name in enumerate(session_keys):
-    with cols[i % 3]:
-        btn_type = "primary" if session_name == st.session_state.current_session else "secondary"
-        if st.button(session_name, key=f"btn_{session_name}", type=btn_type, use_container_width=True):
-            st.session_state.current_session = session_name
-            st.rerun()
-
-# ডিলিট চ্যাট এবং এক্সপোর্ট অপশন
+session_list = list(st.session_state.chat_sessions.keys())
+st.session_state.current_session = st.sidebar.selectbox("Select Chat History", session_list, index=session_list.index(st.session_state.current_session))
 current_messages = st.session_state.chat_sessions[st.session_state.current_session]
-if current_messages:
-    col_del, col_exp = st.columns(2)
-    with col_del:
-        if st.button("🗑️ Delete this Chat", use_container_width=True):
-            delete_chat_session(st.session_state.current_session)
-            del st.session_state.chat_sessions[st.session_state.current_session]
-            st.session_state.current_session = list(st.session_state.chat_sessions.keys())[0]
-            st.rerun()
-    with col_exp:
-        chat_text = "\n\n".join([f"{m['role'].upper()}: {m['content']}" for m in current_messages])
-        st.download_button(
-            label="💾 Export Chat (TXT)",
-            data=chat_text,
-            file_name=f"{st.session_state.current_session}.txt",
-            mime="text/plain",
-            use_container_width=True
-        )
 
-st.divider()
+# সেটিংস
+st.sidebar.markdown("---")
+st.sidebar.subheader("⚙️ Settings")
 
-# ================= অ্যাপ লজিক =================
-if mode == "💬 Chat & Analyze":
+if app_mode == "🤖 Super AI (General)":
+    tool = st.sidebar.selectbox("Choose Tool", ["💬 Chat & Analyze", "🎨 Image Generator", "📊 Data Visualization"])
+    persona_prompt = "You are a super intelligent AI assistant."
+    auto_search = st.sidebar.checkbox("🌐 Enable Auto Web Search")
+else:
+    tool = st.sidebar.selectbox("Teacher Tool", ["💬 Chat with Teacher", "📝 Placement Test", "🎤 Spoken Practice"])
+    persona_prompt = "You are 'Sir English', a highly professional, strict, and expert English teacher. You understand Bengali. Your goal is to correct the user's English, point out mistakes immediately, explain the rules in Bengali, and provide high-level examples. Be encouraging but strict."
+    auto_search = False
+
+enable_voice = st.sidebar.checkbox("🔊 Enable Auto Voice Output", value=True)
+voice_speed = st.sidebar.select_slider("Voice Speed", options=["-50%", "-25%", "+0%", "+25%", "+50%"], value="+0%")
+
+if st.sidebar.button("🗑️ Clear Current Chat", use_container_width=True):
+    st.session_state.chat_sessions[st.session_state.current_session] = []
+    save_chat(st.session_state.username, st.session_state.current_session, [])
+    st.rerun()
+
+# প্রোগ্রেস ড্যাশবোর্ড (সাইডবারে)
+st.sidebar.markdown("---")
+st.sidebar.subheader("📊 Progress Dashboard")
+total_msgs = sum(len(msgs) for msgs in st.session_state.chat_sessions.values())
+st.sidebar.metric("Total Messages Sent", total_msgs)
+st.sidebar.metric("Active Chat Sessions", len(st.session_state.chat_sessions))
+
+# ================= ৬. মেইন অ্যাপ লজিক =================
+
+if app_mode == "🎓 Sir English (Teacher)" and tool == "📝 Placement Test":
+    st.title("📝 English Placement Test")
+    st.write("Answer these 5 questions. The AI will determine your CEFR level (A1 to C2).")
+    
+    q1 = st.text_input("1. What is the past tense of 'go'?")
+    q2 = st.text_input("2. Write a sentence using 'because'.")
+    q3 = st.text_input("3. Correct this sentence: 'She don't like apples.'")
+    q4 = st.text_input("4. What is the difference between 'affect' and 'effect'?")
+    q5 = st.text_area("5. Write a short paragraph (3-4 sentences) about your favorite hobby.")
+    
+    if st.button("Submit Test & Get Level"):
+        if q1 and q2 and q3 and q4 and q5:
+            with st.spinner("Evaluating your level..."):
+                eval_prompt = f"You are an English examiner. Evaluate these answers and determine the user's CEFR level (A1, A2, B1, B2, C1, or C2). Give the level first, then explain why in Bengali. \nAnswers:\n1: {q1}\n2: {q2}\n3: {q3}\n4: {q4}\n5: {q5}"
+                response = groq_client.chat.completions.create(
+                    model="openai/gpt-oss-120b",
+                    messages=[{"role": "user", "content": eval_prompt}]
+                )
+                st.success(response.choices[0].message.content)
+        else:
+            st.warning("Please answer all questions.")
+
+elif tool in ["💬 Chat & Analyze", "💬 Chat with Teacher", "🎤 Spoken Practice"]:
+    st.title("💬 " + tool)
+    
+    # চ্যাট হিস্ট্রি রেন্ডার
     for message in current_messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
+            if message["role"] == "assistant":
+                with st.expander("📋 Copy"):
+                    st.code(message["content"], language="text")
 
-    # রিজেনারেট বাটন (শুধু শেষ মেসেজ এআই-এর হলে দেখাবে)
+    # রিজেনারেট বাটন
     if current_messages and current_messages[-1]["role"] == "assistant":
         if st.button("🔄 Regenerate Last Response"):
-            current_messages.pop() # শেষ উত্তরটা মুছে ফেলবে
-            save_chat(st.session_state.current_session, current_messages)
+            current_messages.pop()
+            save_chat(st.session_state.username, st.session_state.current_session, current_messages)
             st.session_state.trigger_regen = True
             st.rerun()
 
-    with st.expander("📁 Upload File (PDF, Image)"):
+    with st.expander("📁 Upload File (PDF, Image) / 🎤 Voice Input"):
         uploaded_file = st.file_uploader("Upload File", type=["pdf", "png", "jpg", "jpeg"])
         audio_value = st.audio_input("Record a voice message")
 
-    prompt = st.chat_input("Type your prompt here...")
+    placeholder_text = "Type your English sentence here for correction..." if app_mode == "🎓 Sir English (Teacher)" else "Type your prompt here..."
+    prompt = st.chat_input(placeholder_text)
 
-    # ট্রিগার রিজেনারেট বা নতুন মেসেজ
     if prompt or audio_value or st.session_state.get("trigger_regen", False):
-        st.session_state.trigger_regen = False # রিসেট
+        st.session_state.trigger_regen = False
         
         if prompt:
             user_text = prompt
         elif current_messages and current_messages[-1]["role"] == "user":
-            user_text = current_messages[-1]["content"] # রিজেনারেটের জন্য আগের প্রশ্নটা নেবে
+            user_text = current_messages[-1]["content"]
         else:
             user_text = "Please analyze this file."
 
@@ -209,10 +238,9 @@ if mode == "💬 Chat & Analyze":
                 with open("temp_audio.wav", "rb") as f:
                     user_text = groq_client.audio.transcriptions.create(file=("temp_audio.wav", f.read()), model="whisper-large-v3").text
 
-        # যদি নতুন মেসেজ হয়, তবেই অ্যাড করবে (রিজেনারেটে করবে না)
         if prompt or audio_value:
             current_messages.append({"role": "user", "content": user_text})
-            save_chat(st.session_state.current_session, current_messages)
+            save_chat(st.session_state.username, st.session_state.current_session, current_messages)
             with st.chat_message("user"): st.markdown(user_text)
 
         with st.chat_message("assistant"):
@@ -224,7 +252,7 @@ if mode == "💬 Chat & Analyze":
                         answer = response.text
                         st.markdown(answer)
                         current_messages.append({"role": "assistant", "content": answer})
-                        save_chat(st.session_state.current_session, current_messages)
+                        save_chat(st.session_state.username, st.session_state.current_session, current_messages)
                         
                         if enable_voice:
                             audio_data = generate_audio_edge(answer, voice_speed)
@@ -243,14 +271,15 @@ if mode == "💬 Chat & Analyze":
                     answer = st.write_stream(stream_groq_response(chat_history))
                     
                     current_messages.append({"role": "assistant", "content": answer})
-                    save_chat(st.session_state.current_session, current_messages)
+                    save_chat(st.session_state.username, st.session_state.current_session, current_messages)
                     
                     if enable_voice:
                         audio_data = generate_audio_edge(answer, voice_speed)
                         if audio_data: st.audio(audio_data, format="audio/mp3", autoplay=True)
                 except Exception as e: st.error(f"Error: {str(e)}")
 
-elif mode == "🎨 Image Generator":
+elif tool == "🎨 Image Generator":
+    st.title("🎨 AI Image Generator")
     img_prompt = st.text_input("Image Prompt:")
     if st.button("Generate Image"):
         if img_prompt:
@@ -259,7 +288,8 @@ elif mode == "🎨 Image Generator":
                 image_url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width=1024&height=1024&nologo=true"
                 st.image(image_url, use_container_width=True)
 
-elif mode == "📊 Data Visualization":
+elif tool == "📊 Data Visualization":
+    st.title("📊 AI Data Visualization")
     csv_file = st.file_uploader("Upload CSV", type=["csv"])
     if csv_file:
         df = pd.read_csv(csv_file)
