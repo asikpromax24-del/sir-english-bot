@@ -1,6 +1,7 @@
-gradio
+streamlit
 torch
 transformers
 peft
 accelerate
 gdown
+bitsandbytes
