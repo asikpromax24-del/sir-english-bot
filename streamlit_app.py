@@ -6,7 +6,7 @@ import urllib.parse
 import edge_tts
 import asyncio
 import io
-import re
+from langdetect import detect
 
 st.set_page_config(page_title="Super AI - Pro", page_icon="🧠", layout="wide")
 
@@ -14,38 +14,35 @@ st.set_page_config(page_title="Super AI - Pro", page_icon="🧠", layout="wide")
 groq_client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
-# ভাষা ডিটেক্ট করার ফাংশন (Auto-Detect)
-def detect_language(text):
-    if re.search(r'[\u0980-\u09FF]', text): return 'bn' # বাংলা
-    elif re.search(r'[\u0600-\u06FF]', text): return 'ar' # আরবি
-    elif re.search(r'[\u0900-\u097F]', text): return 'hi' # হিন্দি
-    elif re.search(r'[\u4e00-\u9FFF]', text): return 'zh' # চাইনিজ
-    elif re.search(r'[a-zA-Z]', text): return 'en'      # ইংরেজি
-    else: return 'en'
-
-# অডিও জেনারেট করার নতুন ফাংশন (Edge TTS ব্যবহার করে)
-def generate_audio_edge(text, voice_setting):
-    # যদি Auto-Detect সিলেক্ট করা থাকে
-    if voice_setting == "Auto-Detect (Smart)":
-        lang = detect_language(text)
+# অডিও জেনারেট করার ফাংশন (সম্পূর্ণ অটোমেটিক)
+def generate_audio_edge(text):
+    try:
+        # ভাষা অটোমেটিক ডিটেক্ট করা
+        lang = detect(text)
+        
+        # ভাষা অনুযায়ী ভয়েস ম্যাপিং
         voice_map = {
-            'bn': 'bn-BD-NabanitaNeural',
-            'ar': 'ar-SA-ZariyahNeural',
-            'hi': 'hi-IN-SwaraNeural',
-            'zh': 'zh-CN-XiaoxiaoNeural',
-            'en': 'en-US-AriaNeural'
+            'bn': 'bn-BD-NabanitaNeural', # বাংলা
+            'en': 'en-US-AriaNeural',     # ইংরেজি
+            'ru': 'ru-RU-SvetlanaNeural', # রাশিয়ান
+            'ar': 'ar-SA-ZariyahNeural',  # আরবি
+            'hi': 'hi-IN-SwaraNeural',    # হিন্দি
+            'zh-cn': 'zh-CN-XiaoxiaoNeural', # চাইনিজ
+            'fr': 'fr-FR-DeniseNeural',   # ফ্রেঞ্চ
+            'es': 'es-ES-ElviraNeural',   # স্প্যানিশ
+            'de': 'de-DE-KatjaNeural',    # জার্মান
+            'ja': 'ja-JP-NanamiNeural',   # জাপানিজ
+            'ko': 'ko-KR-SunHiNeural',    # কোরিয়ান
+            'pt': 'pt-BR-FranciscaNeural',# পর্তুগিজ
+            'tr': 'tr-TR-EmelNeural',     # তুর্কি
+            'fa': 'fa-IR-DilaraNeural',   # ফারসি
+            'ur': 'ur-PK-UzmaNeural'      # উর্দু
         }
+        
+        # যদি ভাষা খুঁজে না পাওয়া যায়, ডিফল্ট ইংরেজি
         voice = voice_map.get(lang, 'en-US-AriaNeural')
-    else:
-        # ম্যানুয়ালি সিলেক্ট করা ভয়েস
-        voice_mapping = {
-            "Nabanita (Female BD)": "bn-BD-NabanitaNeural",
-            "Pradeep (Male BD)": "bn-BD-PradeepNeural",
-            "Aria (English)": "en-US-AriaNeural",
-            "Zariyah (Arabic)": "ar-SA-ZariyahNeural",
-            "Swara (Hindi)": "hi-IN-SwaraNeural"
-        }
-        voice = voice_mapping.get(voice_setting, 'en-US-AriaNeural')
+    except:
+        voice = 'en-US-AriaNeural'
 
     async def _generate():
         communicate = edge_tts.Communicate(text, voice)
@@ -76,14 +73,6 @@ def translate_to_english(text):
 # Sidebar Menu
 st.sidebar.title("🧠 Super AI Modes")
 mode = st.sidebar.radio("Choose a mode:", ["💬 Chat & Analyze", "🎨 Generate Image", "🌐 Web Search"])
-
-# Voice Selector
-st.sidebar.markdown("---")
-st.sidebar.subheader("🎙️ Voice Settings")
-voice_choice = st.sidebar.selectbox(
-    "Select AI Voice",
-    ["Auto-Detect (Smart)", "Nabanita (Female BD)", "Pradeep (Male BD)", "Aria (English)", "Zariyah (Arabic)", "Swara (Hindi)"]
-)
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -147,7 +136,7 @@ if mode == "💬 Chat & Analyze":
                         ])
                         answer = response.text
                     else:
-                        chat_history = [{"role": "system", "content": "You are a super intelligent AI assistant. You teach English, write code, translate, and answer everything accurately in the language the user uses."}] + [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages[-10:]]
+                        chat_history = [{"role": "system", "content": "You are a super intelligent AI assistant. You teach, write code, translate, and answer everything accurately in the language the user uses."}] + [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages[-10:]]
                         response = groq_client.chat.completions.create(
                             model="openai/gpt-oss-120b",
                             messages=chat_history,
@@ -158,8 +147,8 @@ if mode == "💬 Chat & Analyze":
                     
                     st.markdown(answer)
                     
-                    # অডিও জেনারেট করা
-                    audio_data = generate_audio_edge(answer, voice_choice)
+                    # অটোমেটিক অডিও জেনারেট (কোনো ম্যানুয়াল সেটিং নেই)
+                    audio_data = generate_audio_edge(answer)
                     if audio_data:
                         st.audio(audio_data, format="audio/mp3")
                         
@@ -169,9 +158,9 @@ if mode == "💬 Chat & Analyze":
 
 elif mode == "🎨 Generate Image":
     st.title("🎨 AI Image Generator")
-    st.write("Describe the image you want to create (English, Bengali, Arabic, etc.).")
+    st.write("Describe the image you want to create.")
     
-    img_prompt = st.text_input("Image Prompt:", placeholder="e.g., A beautiful sunset over a calm sea, digital art")
+    img_prompt = st.text_input("Image Prompt:", placeholder="e.g., A beautiful sunset over a calm sea")
     
     if st.button("Generate Image"):
         if img_prompt:
@@ -194,7 +183,7 @@ elif mode == "🌐 Web Search":
         if search_query:
             with st.spinner("Searching the web..."):
                 try:
-                    opt_prompt = f"Extract the best English search engine keywords from this query. Output ONLY the keywords, nothing else.\nQuery: {search_query}"
+                    opt_prompt = f"Extract the best English search engine keywords from this query. Only output the keywords, nothing else.\nQuery: {search_query}"
                     opt_response = groq_client.chat.completions.create(
                         model="openai/gpt-oss-120b",
                         messages=[{"role": "user", "content": opt_prompt}],
@@ -231,7 +220,7 @@ elif mode == "🌐 Web Search":
                         final_answer = response.choices[0].message.content
                         st.markdown(final_answer)
                         
-                        audio_data = generate_audio_edge(final_answer, voice_choice)
+                        audio_data = generate_audio_edge(final_answer)
                         if audio_data:
                             st.audio(audio_data, format="audio/mp3")
                             
