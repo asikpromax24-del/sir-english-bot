@@ -13,30 +13,24 @@ import re
 import sqlite3
 import json
 
-# ================= ১. পেজ কনফিগারেশন ও ডার্ক থিম ফিক্স =================
+# ================= ১. পেজ কনফিগারেশন ও ডার্ক থিম =================
 st.set_page_config(page_title="Super AI & Sir English", page_icon="🧠", layout="wide", initial_sidebar_state="expanded")
 
 custom_css = """
 <style>
-    #MainMenu {visibility: hidden;} 
-    footer {visibility: hidden;} 
+    #MainMenu {visibility: hidden;} footer {visibility: hidden;} 
     header[data-testid="stHeader"] { background-color: transparent !important; }
-    
     .stApp { background-color: #0E1117; color: #FAFAFA !important; }
     
-    /* চ্যাট মেসেজ ডিজাইন */
     div[data-testid="stChatMessage"] { 
         background-color: #1E232B; border-radius: 10px; padding: 15px; margin-bottom: 10px; color: #FAFAFA !important;
     }
     div[data-testid="stChatMessage"] p, div[data-testid="stChatMessage"] li, div[data-testid="stChatMessage"] span,
     div[data-testid="stChatMessage"] h1, div[data-testid="stChatMessage"] h2, div[data-testid="stChatMessage"] h3,
-    div[data-testid="stChatMessage"] strong { 
-        color: #FAFAFA !important; 
-    }
+    div[data-testid="stChatMessage"] strong { color: #FAFAFA !important; }
     div[data-testid="stChatMessage"] table { border-collapse: collapse; width: 100%; margin: 10px 0; }
     div[data-testid="stChatMessage"] th, div[data-testid="stChatMessage"] td { color: #FAFAFA !important; border: 1px solid #555 !important; padding: 8px; }
     
-    /* চ্যাট ইনপুট বক্স ফিক্স */
     div[data-testid="stChatInput"] { background-color: #1E232B !important; border-radius: 10px; }
     div[data-testid="stChatInput"] > div { background-color: #1E232B !important; border: 1px solid #444 !important; border-radius: 10px; }
     div[data-testid="stChatInput"] textarea { color: #FAFAFA !important; background-color: transparent !important; }
@@ -44,38 +38,18 @@ custom_css = """
     div[data-testid="stChatInput"] button { background-color: #2B313A !important; border-radius: 5px !important; }
     div[data-testid="stChatInput"] button svg { fill: #FAFAFA !important; }
     
-    /* ================= লগইন এবং ইনপুট বক্স ফিক্স ================= */
-    div[data-testid="stTextInput"] input, 
-    div[data-testid="stTextArea"] textarea {
-        color: #FAFAFA !important; /* লেখা সাদা */
-        background-color: #1E232B !important; /* ব্যাকগ্রাউন্ড ডার্ক */
-        border: 1px solid #555 !important;
+    div[data-testid="stTextInput"] input, div[data-testid="stTextArea"] textarea {
+        color: #FAFAFA !important; background-color: #1E232B !important; border: 1px solid #555 !important;
     }
-    div[data-testid="stTextInput"] label, 
-    div[data-testid="stTextArea"] label,
-    div[data-testid="stSelectbox"] label {
-        color: #FAFAFA !important;
-    }
+    div[data-testid="stTextInput"] label, div[data-testid="stTextArea"] label, div[data-testid="stSelectbox"] label { color: #FAFAFA !important; }
     
-    /* ================= বাটন ফিক্স ================= */
     .stButton > button {
-        color: #FAFAFA !important; 
-        background-color: #2B313A !important; 
-        border: 1px solid #555 !important;
-        width: 100%;
+        color: #FAFAFA !important; background-color: #2B313A !important; border: 1px solid #555 !important; width: 100%;
     }
-    .stButton > button:hover {
-        background-color: #444 !important;
-        border: 1px solid #FAFAFA !important;
-    }
+    .stButton > button:hover { background-color: #444 !important; border: 1px solid #FAFAFA !important; }
     
-    /* সাইডবার স্টাইল */
     section[data-testid="stSidebar"] { background-color: #0E1117; border-right: 1px solid #333; }
-    section[data-testid="stSidebar"] p, section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] h2, section[data-testid="stSidebar"] h3 {
-        color: #FAFAFA !important;
-    }
-    
-    /* এক্সপ্যান্ডার ফিক্স */
+    section[data-testid="stSidebar"] p, section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] h2, section[data-testid="stSidebar"] h3 { color: #FAFAFA !important; }
     .streamlit-expanderHeader { color: #FAFAFA !important; }
 </style>
 """
@@ -135,17 +109,24 @@ def stream_groq_response(chat_history):
         if chunk.choices[0].delta.content:
             yield chunk.choices[0].delta.content
 
-# ================= ৪. ইউজার অথেনটিকেশন (লগইন) =================
+# ================= ৪. ইউজার অথেনটিকেশন (সুরক্ষিত লগইন) =================
 if "logged_in" not in st.session_state: st.session_state.logged_in = False
 if "username" not in st.session_state: st.session_state.username = ""
 
 if not st.session_state.logged_in:
     st.title("🔐 Welcome to Super AI & Sir English")
     st.markdown("Please log in to continue.")
-    user = st.text_input("Username (e.g., admin)")
-    pwd = st.text_input("Password (Demo: **admin123**)", type="password")
+    
+    # এখানে আর কোনো পাসওয়ার্ড দেখাবে না
+    user = st.text_input("Username")
+    pwd = st.text_input("Password", type="password")
+    
     if st.button("Login"):
-        if user and pwd == "admin123":
+        # Secrets থেকে আসল পাসওয়ার্ড চেক করা হচ্ছে
+        expected_user = st.secrets.get("ADMIN_USERNAME", "Asikul")
+        expected_pass = st.secrets.get("ADMIN_PASSWORD", "Asikul90dss")
+        
+        if user == expected_user and pwd == expected_pass:
             st.session_state.logged_in = True
             st.session_state.username = user
             st.rerun()
@@ -159,10 +140,8 @@ if st.sidebar.button("Logout"):
     st.session_state.logged_in = False
     st.rerun()
 
-# মোড সিলেকশন
 app_mode = st.sidebar.radio("Select App Mode", ["🤖 Super AI (General)", "🎓 Sir English (Teacher)"])
 
-# চ্যাট সেশন ম্যানেজমেন্ট (সাইডবারে)
 if "chat_sessions" not in st.session_state:
     st.session_state.chat_sessions = load_chats(st.session_state.username)
 if "current_session" not in st.session_state:
@@ -178,7 +157,6 @@ session_list = list(st.session_state.chat_sessions.keys())
 st.session_state.current_session = st.sidebar.selectbox("Select Chat History", session_list, index=session_list.index(st.session_state.current_session))
 current_messages = st.session_state.chat_sessions[st.session_state.current_session]
 
-# সেটিংস
 st.sidebar.markdown("---")
 st.sidebar.subheader("⚙️ Settings")
 
@@ -199,7 +177,6 @@ if st.sidebar.button("🗑️ Clear Current Chat"):
     save_chat(st.session_state.username, st.session_state.current_session, [])
     st.rerun()
 
-# প্রোগ্রেস ড্যাশবোর্ড (সাইডবারে)
 st.sidebar.markdown("---")
 st.sidebar.subheader("📊 Progress Dashboard")
 total_msgs = sum(len(msgs) for msgs in st.session_state.chat_sessions.values())
@@ -233,7 +210,6 @@ if app_mode == "🎓 Sir English (Teacher)" and tool == "📝 Placement Test":
 elif tool in ["💬 Chat & Analyze", "💬 Chat with Teacher", "🎤 Spoken Practice"]:
     st.title("💬 " + tool)
     
-    # চ্যাট হিস্ট্রি রেন্ডার
     for message in current_messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
@@ -241,7 +217,6 @@ elif tool in ["💬 Chat & Analyze", "💬 Chat with Teacher", "🎤 Spoken Prac
                 with st.expander("📋 Copy"):
                     st.code(message["content"], language="text")
 
-    # রিজেনারেট বাটন
     if current_messages and current_messages[-1]["role"] == "assistant":
         if st.button("🔄 Regenerate Last Response"):
             current_messages.pop()
@@ -281,7 +256,6 @@ elif tool in ["💬 Chat & Analyze", "💬 Chat with Teacher", "🎤 Spoken Prac
             if uploaded_file:
                 with st.spinner("Analyzing file..."):
                     try:
-                        # ভিশন মডেলের নাম ঠিক করা হয়েছে
                         gemini_model = genai.GenerativeModel('gemini-1.5-flash')
                         response = gemini_model.generate_content([user_text, {"mime_type": uploaded_file.type, "data": uploaded_file.getvalue()}])
                         answer = response.text
