@@ -21,7 +21,6 @@ custom_css = """
     #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
     .stApp { background-color: #0E1117; color: #FAFAFA !important; }
     
-    /* চ্যাট মেসেজ বক্স */
     div[data-testid="stChatMessage"] { 
         background-color: #1E232B; border-radius: 10px; padding: 15px; margin-bottom: 10px; color: #FAFAFA !important;
     }
@@ -32,7 +31,6 @@ custom_css = """
     div[data-testid="stChatMessage"] table { border-collapse: collapse; width: 100%; margin: 10px 0; }
     div[data-testid="stChatMessage"] th, div[data-testid="stChatMessage"] td { color: #FAFAFA !important; border: 1px solid #555 !important; padding: 8px; }
     
-    /* ইনপুট বক্স ফিক্স */
     div[data-testid="stChatInput"] { background-color: #1E232B !important; border-radius: 10px; }
     div[data-testid="stChatInput"] > div { background-color: #1E232B !important; border: 1px solid #444 !important; border-radius: 10px; }
     div[data-testid="stChatInput"] textarea { color: #FAFAFA !important; background-color: transparent !important; }
@@ -47,7 +45,7 @@ st.markdown(custom_css, unsafe_allow_html=True)
 groq_client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
-# ================= ডেটাবেস সেটআপ (চ্যাট সেভের জন্য) =================
+# ================= ডেটাবেস সেটআপ =================
 def init_db():
     conn = sqlite3.connect('super_ai.db')
     c = conn.cursor()
@@ -96,11 +94,7 @@ def generate_audio_edge(text, speed="+0%"):
 # ================= লাইভ টাইপিং ফাংশন =================
 def stream_groq_response(chat_history):
     stream = groq_client.chat.completions.create(
-        model="openai/gpt-oss-120b",
-        messages=chat_history,
-        temperature=0.7,
-        max_tokens=1500,
-        stream=True
+        model="openai/gpt-oss-120b", messages=chat_history, temperature=0.7, max_tokens=1500, stream=True
     )
     for chunk in stream:
         if chunk.choices[0].delta.content:
@@ -115,7 +109,7 @@ if "chat_sessions" not in st.session_state:
 if "current_session" not in st.session_state:
     st.session_state.current_session = list(st.session_state.chat_sessions.keys())[0]
 
-# সেটিংস ও টুলস
+# ⚙️ সেটিংস ও টুলস
 with st.expander("⚙️ Settings & Tools", expanded=False):
     col1, col2 = st.columns(2)
     with col1:
@@ -129,33 +123,31 @@ with st.expander("⚙️ Settings & Tools", expanded=False):
     enable_voice = st.checkbox("🔊 Enable Auto Voice Output", value=True)
     voice_speed = st.select_slider("Voice Speed", options=["-50%", "-25%", "+0%", "+25%", "+50%"], value="+0%")
 
-# চ্যাট সেশন ম্যানেজার
-with st.expander("🗂️ Chat Sessions", expanded=False):
-    session_list = list(st.session_state.chat_sessions.keys())
-    selected_session = st.selectbox("Select Chat", session_list, index=session_list.index(st.session_state.current_session))
-    
-    colA, colB = st.columns(2)
-    with colA:
-        if st.button("➕ New Chat"):
-            new_chat_id = f"Chat {len(st.session_state.chat_sessions) + 1}"
-            st.session_state.chat_sessions[new_chat_id] = []
-            st.session_state.current_session = new_chat_id
+# 🗂️ চ্যাট লিস্ট (সরাসরি বাটন আকারে)
+st.write("**🗂️ Your Chats:**")
+# নতুন চ্যাট বাটন
+if st.button("➕ New Chat", use_container_width=True):
+    new_chat_id = f"Chat {len(st.session_state.chat_sessions) + 1}"
+    st.session_state.chat_sessions[new_chat_id] = []
+    st.session_state.current_session = new_chat_id
+    st.rerun()
+
+# চ্যাট সেশন বাটনগুলো (একটি সারিতে ৩টা করে)
+session_keys = list(st.session_state.chat_sessions.keys())
+cols = st.columns(3)
+for i, session_name in enumerate(session_keys):
+    with cols[i % 3]:
+        # বর্তমানে সিলেক্টেড চ্যাটটা হাইলাইট করা
+        btn_type = "primary" if session_name == st.session_state.current_session else "secondary"
+        if st.button(session_name, key=f"btn_{session_name}", type=btn_type, use_container_width=True):
+            st.session_state.current_session = session_name
             st.rerun()
-    with colB:
-        if st.button("🗑️ Clear Chat"):
-            st.session_state.chat_sessions[st.session_state.current_session] = []
-            save_chat(st.session_state.current_session, [])
-            st.rerun()
-            
-    if selected_session != st.session_state.current_session:
-        st.session_state.current_session = selected_session
-        st.rerun()
+st.divider()
 
 # ================= অ্যাপ লজিক =================
 current_messages = st.session_state.chat_sessions[st.session_state.current_session]
 
 if mode == "💬 Chat & Analyze":
-    # চ্যাট হিস্ট্রি রেন্ডার
     for message in current_messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
@@ -181,7 +173,6 @@ if mode == "💬 Chat & Analyze":
 
         with st.chat_message("assistant"):
             if uploaded_file:
-                # ইমেজ ভিশন (Gemini)
                 with st.spinner("Analyzing file..."):
                     try:
                         gemini_model = genai.GenerativeModel('gemini-3.8-flash')
@@ -196,7 +187,6 @@ if mode == "💬 Chat & Analyze":
                             if audio_data: st.audio(audio_data, format="audio/mp3", autoplay=True)
                     except Exception as e: st.error(f"Error: {str(e)}")
             else:
-                # লাইভ টাইপিং (Groq)
                 try:
                     context = ""
                     if auto_search:
@@ -206,7 +196,6 @@ if mode == "💬 Chat & Analyze":
                     final_prompt = persona_prompt + context + "\n\nIMPORTANT: Reply in clear text. Use standard Markdown tables. Reply in the user's language."
                     chat_history = [{"role": "system", "content": final_prompt}] + [{"role": m["role"], "content": m["content"]} for m in current_messages[-20:]]
                     
-                    # st.write_stream দিয়ে লাইভ টাইপিং দেখানো
                     answer = st.write_stream(stream_groq_response(chat_history))
                     
                     current_messages.append({"role": "assistant", "content": answer})
