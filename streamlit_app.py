@@ -13,16 +13,61 @@ import re
 import sqlite3
 import json
 
-# ১. পেজ কনফিগারেশন ও ডার্ক থিম
+# ১. পেজ কনফিগারেশন ও ডার্ক থিম (লেখা সাদা করার ফিক্স)
 st.set_page_config(page_title="Super AI Pro", page_icon="🧠", layout="wide", initial_sidebar_state="expanded")
-st.markdown("""
+
+custom_css = """
 <style>
+    /* Streamlit ডিফল্ট মেনু হাইড করা */
     #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
-    .stApp { background-color: #0E1117; color: #FAFAFA; }
+    
+    /* ব্যাকগ্রাউন্ড ডার্ক করা */
+    .stApp { background-color: #0E1117; color: #FAFAFA !important; }
     .stChatFloatingInputContainer { background-color: #0E1117; }
-    div[data-testid="stChatMessage"] { background-color: #1E232B; border-radius: 10px; padding: 10px; margin-bottom: 10px; }
+    
+    /* চ্যাট মেসেজ বক্স ডার্ক করা এবং লেখা সাদা করা */
+    div[data-testid="stChatMessage"] { 
+        background-color: #1E232B; 
+        border-radius: 10px; 
+        padding: 15px; 
+        margin-bottom: 10px; 
+        color: #FAFAFA !important;
+    }
+    
+    /* চ্যাটের ভেতরের সব লেখা, বুলেট পয়েন্ট, হেডিং সাদা করা */
+    div[data-testid="stChatMessage"] p, 
+    div[data-testid="stChatMessage"] li, 
+    div[data-testid="stChatMessage"] span,
+    div[data-testid="stChatMessage"] h1, 
+    div[data-testid="stChatMessage"] h2, 
+    div[data-testid="stChatMessage"] h3,
+    div[data-testid="stChatMessage"] h4,
+    div[data-testid="stChatMessage"] strong,
+    div[data-testid="stChatMessage"] em { 
+        color: #FAFAFA !important; 
+    }
+    
+    /* টেবিলের ভেতরের লেখা সাদা এবং বর্ডার ঠিক করা */
+    div[data-testid="stChatMessage"] table {
+        border-collapse: collapse;
+        width: 100%;
+        margin: 10px 0;
+    }
+    div[data-testid="stChatMessage"] th, 
+    div[data-testid="stChatMessage"] td {
+        color: #FAFAFA !important;
+        border: 1px solid #555 !important;
+        padding: 8px;
+    }
+    div[data-testid="stChatMessage"] th {
+        background-color: #2B313A;
+    }
+    
+    /* Expander (Copy) লেখা সাদা করা */
+    .streamlit-expanderHeader { color: #FAFAFA !important; }
 </style>
-""", unsafe_allow_html=True)
+"""
+st.markdown(custom_css, unsafe_allow_html=True)
 
 # API Clients
 groq_client = Groq(api_key=st.secrets["GROQ_API_KEY"])
@@ -130,6 +175,8 @@ enable_voice = st.sidebar.checkbox("🔊 Enable Voice Output", value=True)
 voice_speed = st.sidebar.select_slider("Voice Speed", options=["-50%", "-25%", "+0%", "+25%", "+50%"], value="+0%")
 
 # ================= মেইন অ্যাপ লজিক =================
+
+# ১. চ্যাট ও অ্যানালাইসিস
 if mode == "💬 Chat & Analyze":
     st.title("💬 Chat, Voice & Data Analysis")
     for message in current_messages:
@@ -170,7 +217,10 @@ if mode == "💬 Chat & Analyze":
                             results = list(DDGS().text(user_text, max_results=3))
                             if results: context = "\n".join([f"Snippet: {r['body']}" for r in results])
                         
-                        chat_history = [{"role": "system", "content": persona_prompt + context}] + [{"role": m["role"], "content": m["content"]} for m in current_messages[-20:]]
+                        # এআই-কে পরিষ্কারভাবে উত্তর দিতে বলা (ভাঙা টেবিল বন্ধ করতে)
+                        final_prompt = persona_prompt + context + "\n\nIMPORTANT: Always reply in clear, well-formatted text. If you need to use a table, use standard Markdown format. Do not create weird spacing or broken tables. Always reply in the language the user asked in."
+                        
+                        chat_history = [{"role": "system", "content": final_prompt}] + [{"role": m["role"], "content": m["content"]} for m in current_messages[-20:]]
                         answer = groq_client.chat.completions.create(model="openai/gpt-oss-120b", messages=chat_history, temperature=0.7, max_tokens=1500).choices[0].message.content
                     
                     st.markdown(answer)
@@ -182,7 +232,7 @@ if mode == "💬 Chat & Analyze":
                         if audio_data: st.audio(audio_data, format="audio/mp3")
                 except Exception as e: st.error(f"Error: {str(e)}")
 
-# ডেটা ভিজুয়ালাইজেশন ও ইমেজ জেনারেটর আগের মতোই থাকবে...
+# ২. ডেটা ভিজুয়ালাইজেশন
 elif mode == "📊 Data Visualization":
     st.title("📊 AI Data Visualization")
     csv_file = st.file_uploader("Upload CSV", type=["csv"])
@@ -202,6 +252,7 @@ elif mode == "📊 Data Visualization":
                         st.plotly_chart(local_vars['fig'], use_container_width=True)
                     except Exception as e: st.error(f"চার্ট তৈরিতে সমস্যা: {str(e)}")
 
+# ৩. ইমেজ জেনারেটর
 elif mode == "🎨 Image Generator":
     st.title("🎨 AI Image Generator")
     img_prompt = st.text_input("Image Prompt:")
