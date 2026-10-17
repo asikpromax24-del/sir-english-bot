@@ -21,6 +21,7 @@ custom_css = """
     #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
     .stApp { background-color: #0E1117; color: #FAFAFA !important; }
     
+    /* চ্যাট মেসেজ ডিজাইন */
     div[data-testid="stChatMessage"] { 
         background-color: #1E232B; border-radius: 10px; padding: 15px; margin-bottom: 10px; color: #FAFAFA !important;
     }
@@ -31,6 +32,7 @@ custom_css = """
     div[data-testid="stChatMessage"] table { border-collapse: collapse; width: 100%; margin: 10px 0; }
     div[data-testid="stChatMessage"] th, div[data-testid="stChatMessage"] td { color: #FAFAFA !important; border: 1px solid #555 !important; padding: 8px; }
     
+    /* চ্যাট ইনপুট বক্স ফিক্স */
     div[data-testid="stChatInput"] { background-color: #1E232B !important; border-radius: 10px; }
     div[data-testid="stChatInput"] > div { background-color: #1E232B !important; border: 1px solid #444 !important; border-radius: 10px; }
     div[data-testid="stChatInput"] textarea { color: #FAFAFA !important; background-color: transparent !important; }
@@ -70,6 +72,11 @@ def load_chats():
     for row in rows:
         sessions[row[0]] = json.loads(row[1])
     return sessions if sessions else {"Chat 1": []}
+
+def delete_chat_session(session_name):
+    c = conn.cursor()
+    c.execute("DELETE FROM chats WHERE session_name=?", (session_name,))
+    conn.commit()
 
 # ================= অডিও জেনারেটর =================
 def generate_audio_edge(text, speed="+0%"):
@@ -125,32 +132,59 @@ with st.expander("⚙️ Settings & Tools", expanded=False):
 
 # 🗂️ চ্যাট লিস্ট (সরাসরি বাটন আকারে)
 st.write("**🗂️ Your Chats:**")
-# নতুন চ্যাট বাটন
-if st.button("➕ New Chat", use_container_width=True):
-    new_chat_id = f"Chat {len(st.session_state.chat_sessions) + 1}"
-    st.session_state.chat_sessions[new_chat_id] = []
-    st.session_state.current_session = new_chat_id
-    st.rerun()
+colA, colB = st.columns([1, 2])
+with colA:
+    if st.button("➕ New Chat", use_container_width=True):
+        new_chat_id = f"Chat {len(st.session_state.chat_sessions) + 1}"
+        st.session_state.chat_sessions[new_chat_id] = []
+        st.session_state.current_session = new_chat_id
+        st.rerun()
 
-# চ্যাট সেশন বাটনগুলো (একটি সারিতে ৩টা করে)
+# চ্যাট সেশন বাটনগুলো এবং ডিলিট অপশন
 session_keys = list(st.session_state.chat_sessions.keys())
 cols = st.columns(3)
 for i, session_name in enumerate(session_keys):
     with cols[i % 3]:
-        # বর্তমানে সিলেক্টেড চ্যাটটা হাইলাইট করা
         btn_type = "primary" if session_name == st.session_state.current_session else "secondary"
         if st.button(session_name, key=f"btn_{session_name}", type=btn_type, use_container_width=True):
             st.session_state.current_session = session_name
             st.rerun()
+
+# ডিলিট চ্যাট এবং এক্সপোর্ট অপশন
+current_messages = st.session_state.chat_sessions[st.session_state.current_session]
+if current_messages:
+    col_del, col_exp = st.columns(2)
+    with col_del:
+        if st.button("🗑️ Delete this Chat", use_container_width=True):
+            delete_chat_session(st.session_state.current_session)
+            del st.session_state.chat_sessions[st.session_state.current_session]
+            st.session_state.current_session = list(st.session_state.chat_sessions.keys())[0]
+            st.rerun()
+    with col_exp:
+        chat_text = "\n\n".join([f"{m['role'].upper()}: {m['content']}" for m in current_messages])
+        st.download_button(
+            label="💾 Export Chat (TXT)",
+            data=chat_text,
+            file_name=f"{st.session_state.current_session}.txt",
+            mime="text/plain",
+            use_container_width=True
+        )
+
 st.divider()
 
 # ================= অ্যাপ লজিক =================
-current_messages = st.session_state.chat_sessions[st.session_state.current_session]
-
 if mode == "💬 Chat & Analyze":
     for message in current_messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
+
+    # রিজেনারেট বাটন (শুধু শেষ মেসেজ এআই-এর হলে দেখাবে)
+    if current_messages and current_messages[-1]["role"] == "assistant":
+        if st.button("🔄 Regenerate Last Response"):
+            current_messages.pop() # শেষ উত্তরটা মুছে ফেলবে
+            save_chat(st.session_state.current_session, current_messages)
+            st.session_state.trigger_regen = True
+            st.rerun()
 
     with st.expander("📁 Upload File (PDF, Image)"):
         uploaded_file = st.file_uploader("Upload File", type=["pdf", "png", "jpg", "jpeg"])
@@ -158,18 +192,28 @@ if mode == "💬 Chat & Analyze":
 
     prompt = st.chat_input("Type your prompt here...")
 
-    if prompt or audio_value:
-        user_text = prompt
+    # ট্রিগার রিজেনারেট বা নতুন মেসেজ
+    if prompt or audio_value or st.session_state.get("trigger_regen", False):
+        st.session_state.trigger_regen = False # রিসেট
+        
+        if prompt:
+            user_text = prompt
+        elif current_messages and current_messages[-1]["role"] == "user":
+            user_text = current_messages[-1]["content"] # রিজেনারেটের জন্য আগের প্রশ্নটা নেবে
+        else:
+            user_text = "Please analyze this file."
+
         if audio_value:
             with st.spinner("Transcribing..."):
                 with open("temp_audio.wav", "wb") as f: f.write(audio_value.getbuffer())
                 with open("temp_audio.wav", "rb") as f:
                     user_text = groq_client.audio.transcriptions.create(file=("temp_audio.wav", f.read()), model="whisper-large-v3").text
 
-        current_messages.append({"role": "user", "content": user_text})
-        save_chat(st.session_state.current_session, current_messages)
-        
-        with st.chat_message("user"): st.markdown(user_text)
+        # যদি নতুন মেসেজ হয়, তবেই অ্যাড করবে (রিজেনারেটে করবে না)
+        if prompt or audio_value:
+            current_messages.append({"role": "user", "content": user_text})
+            save_chat(st.session_state.current_session, current_messages)
+            with st.chat_message("user"): st.markdown(user_text)
 
         with st.chat_message("assistant"):
             if uploaded_file:
