@@ -3,7 +3,8 @@ from groq import Groq
 import google.generativeai as genai
 from ddgs import DDGS
 import urllib.parse
-import streamlit.components.v1 as components
+from gtts import gTTS
+import io
 
 st.set_page_config(page_title="Super AI - Pro", page_icon="🧠", layout="wide")
 
@@ -11,23 +12,44 @@ st.set_page_config(page_title="Super AI - Pro", page_icon="🧠", layout="wide")
 groq_client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
-# বাংলা থেকে ইংরেজি অনুবাদ করার ফাংশন (Gemini ব্যবহার করে)
+# বাংলা থেকে ইংরেজি অনুবাদ করার ফাংশন (ছবি তৈরির জন্য)
 def translate_to_english(text):
-    prompt = f"Translate the following Bengali or mixed text into a detailed English image generation prompt. Only output the English translation, nothing else:\n\n{text}"
+    prompt = f"Translate the following text into a detailed English image generation prompt. Only output the English translation, nothing else:\n\n{text}"
     try:
-        # ট্রান্সলেশনের জন্য Gemini ব্যবহার করা হলো (কম রেস্ট্রিক্টিভ)
         gemini_model = genai.GenerativeModel('gemini-3.8-flash')
         response = gemini_model.generate_content(prompt)
         return response.text.strip()
-    except Exception as e:
-        return text # অনুবাদ ব্যর্থ হলে আসল টেক্সটই পাঠাবে
+    except:
+        return text
+
+# অডিও জেনারেট করার ফাংশন
+def generate_audio(text, lang='en'):
+    try:
+        tts = gTTS(text=text, lang=lang, slow=False)
+        audio_bytes = io.BytesIO()
+        tts.write_to_fp(audio_bytes)
+        audio_bytes.seek(0)
+        return audio_bytes
+    except:
+        return None
 
 # Sidebar Menu
 st.sidebar.title("🧠 Super AI Modes")
 mode = st.sidebar.radio("Choose a mode:", ["💬 Chat & Analyze", "🎨 Generate Image", "🌐 Web Search"])
 
+# Chat History & Download
 if "messages" not in st.session_state:
     st.session_state.messages = []
+
+st.sidebar.markdown("---")
+if st.session_state.messages:
+    chat_text = "\n\n".join([f"{m['role'].upper()}: {m['content']}" for m in st.session_state.messages])
+    st.sidebar.download_button(
+        label="💾 Download Chat History",
+        data=chat_text,
+        file_name="super_ai_chat.txt",
+        mime="text/plain"
+    )
 
 if mode == "💬 Chat & Analyze":
     st.title("💬 Chat, Voice & File Analysis")
@@ -88,6 +110,12 @@ if mode == "💬 Chat & Analyze":
                         answer = response.choices[0].message.content
                     
                     st.markdown(answer)
+                    
+                    # অডিও বাটন
+                    audio_data = generate_audio(answer, lang='en') # ডিফল্ট ইংরেজি, চাইলে বাংলাও করা যায়
+                    if audio_data:
+                        st.audio(audio_data, format="audio/mp3")
+                        
                     st.session_state.messages.append({"role": "assistant", "content": answer})
                 except Exception as e:
                     st.error(f"Error: {str(e)}")
@@ -119,26 +147,18 @@ elif mode == "🌐 Web Search":
         if search_query:
             with st.spinner("Searching the web..."):
                 try:
-                    from ddgs import DDGS
-                    
-                    # ১. এআই-কে দিয়ে বাংলা প্রশ্নটাকে ইংরেজি সার্চ কি-ওয়ার্ডে অনুবাদ করানো
-                    opt_prompt = f"Translate the following query into English search engine keywords. Output ONLY the keywords, nothing else.\nQuery: {search_query}"
+                    opt_prompt = f"Extract the best English search engine keywords from this query. Output ONLY the keywords, nothing else.\nQuery: {search_query}"
                     opt_response = groq_client.chat.completions.create(
                         model="openai/gpt-oss-120b",
                         messages=[{"role": "user", "content": opt_prompt}],
                         temperature=0.1,
                         max_tokens=50
                     )
+                    optimized_query = opt_response.choices[0].message.content.strip()
                     
-                    optimized_query = opt_response.choices[0].message.content
-                    
-                    # চেক করা হচ্ছে অনুবাদ টেক্সটটা খালি কি না
-                    if not optimized_query or not optimized_query.strip():
+                    if not optimized_query:
                         optimized_query = search_query
-                    else:
-                        optimized_query = optimized_query.strip()
-                    
-                    # ২. ইংরেজি কি-ওয়ার্ড দিয়ে DuckDuckGo সার্চ
+                        
                     ddgs = DDGS()
                     results = list(ddgs.text(optimized_query, max_results=5))
                     
@@ -146,11 +166,10 @@ elif mode == "🌐 Web Search":
                         results = list(ddgs.news(optimized_query, max_results=5))
                     
                     if not results:
-                        st.warning(f"সার্চ ইঞ্জিন থেকে কোনো তথ্য পাওয়া যায়নি (Optimized Keyword: '{optimized_query}')। অনুগ্রহ করে অন্য কিছু চেষ্টা করুন।")
+                        st.warning(f"সার্চ ইঞ্জিন থেকে কোনো তথ্য পাওয়া যায়নি।")
                     else:
                         context = "\n\n".join([f"Title: {r.get('title', '')}\nSnippet: {r.get('body', '')}" for r in results])
                         
-                        # ৩. সার্চ রেজাল্ট থেকে এআই-কে দিয়ে ফাইনাল উত্তর তৈরি করানো হচ্ছে
                         system_prompt = f"You are a smart AI assistant. Based on the following live web search results, answer the user's question accurately. The user's original question was: '{search_query}'.\n\nSearch Results:\n{context}"
                         
                         response = groq_client.chat.completions.create(
@@ -162,7 +181,14 @@ elif mode == "🌐 Web Search":
                             temperature=0.5,
                             max_tokens=1000
                         )
-                        st.markdown(response.choices[0].message.content)
+                        final_answer = response.choices[0].message.content
+                        st.markdown(final_answer)
+                        
+                        # অডিও বাটন
+                        audio_data = generate_audio(final_answer, lang='en')
+                        if audio_data:
+                            st.audio(audio_data, format="audio/mp3")
+                            
                 except Exception as e:
                     st.error(f"সার্চ করতে সমস্যা হচ্ছে: {str(e)}")
         else:
