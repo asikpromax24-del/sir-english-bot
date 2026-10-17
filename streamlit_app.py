@@ -13,7 +13,7 @@ import re
 import sqlite3
 import json
 
-# ১. পেজ কনফিগারেশন ও ডার্ক থিম (লেখা সাদা করার ফিক্স)
+# ১. পেজ কনফিগারেশন ও ডার্ক থিম (ইনপুট বক্স ফিক্সসহ)
 st.set_page_config(page_title="Super AI Pro", page_icon="🧠", layout="wide", initial_sidebar_state="expanded")
 
 custom_css = """
@@ -23,7 +23,6 @@ custom_css = """
     
     /* ব্যাকগ্রাউন্ড ডার্ক করা */
     .stApp { background-color: #0E1117; color: #FAFAFA !important; }
-    .stChatFloatingInputContainer { background-color: #0E1117; }
     
     /* চ্যাট মেসেজ বক্স ডার্ক করা এবং লেখা সাদা করা */
     div[data-testid="stChatMessage"] { 
@@ -48,19 +47,35 @@ custom_css = """
     }
     
     /* টেবিলের ভেতরের লেখা সাদা এবং বর্ডার ঠিক করা */
-    div[data-testid="stChatMessage"] table {
-        border-collapse: collapse;
-        width: 100%;
-        margin: 10px 0;
-    }
-    div[data-testid="stChatMessage"] th, 
-    div[data-testid="stChatMessage"] td {
+    div[data-testid="stChatMessage"] table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+    div[data-testid="stChatMessage"] th, div[data-testid="stChatMessage"] td {
         color: #FAFAFA !important;
         border: 1px solid #555 !important;
         padding: 8px;
     }
-    div[data-testid="stChatMessage"] th {
-        background-color: #2B313A;
+    div[data-testid="stChatMessage"] th { background-color: #2B313A; }
+    
+    /* ================= CHAT INPUT BOX FIX ================= */
+    /* চ্যাট ইনপুট বক্সের ব্যাকগ্রাউন্ড ডার্ক করা */
+    div[data-testid="stChatInput"] {
+        background-color: #1E232B !important;
+        border-radius: 10px;
+        border: 1px solid #444 !important;
+    }
+    /* ইনপুট বক্সের ভেতরের লেখা সাদা করা */
+    div[data-testid="stChatInput"] textarea {
+        color: #FAFAFA !important; 
+        background-color: transparent !important;
+    }
+    /* প্লেসহোল্ডার (Type your prompt here...) এর কালার ঠিক করা */
+    div[data-testid="stChatInput"] textarea::placeholder {
+        color: #888 !important; 
+    }
+    
+    /* সাইডবারের ইনপুট/টেক্সট এরিয়ার লেখা ঠিক করা */
+    .stTextInput input, .stTextArea textarea {
+        color: #FAFAFA !important;
+        background-color: #1E232B !important;
     }
     
     /* Expander (Copy) লেখা সাদা করা */
@@ -217,7 +232,7 @@ if mode == "💬 Chat & Analyze":
                             results = list(DDGS().text(user_text, max_results=3))
                             if results: context = "\n".join([f"Snippet: {r['body']}" for r in results])
                         
-                        # এআই-কে পরিষ্কারভাবে উত্তর দিতে বলা (ভাঙা টেবিল বন্ধ করতে)
+                        # এআই-কে পরিষ্কারভাবে উত্তর দিতে বলা
                         final_prompt = persona_prompt + context + "\n\nIMPORTANT: Always reply in clear, well-formatted text. If you need to use a table, use standard Markdown format. Do not create weird spacing or broken tables. Always reply in the language the user asked in."
                         
                         chat_history = [{"role": "system", "content": final_prompt}] + [{"role": m["role"], "content": m["content"]} for m in current_messages[-20:]]
