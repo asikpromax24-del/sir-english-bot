@@ -9,6 +9,10 @@ import io
 from langdetect import detect
 import json
 import hashlib
+import hmac
+import os
+import re
+from urllib.parse import urlparse
 import pandas as pd
 import plotly.express as px
 from supabase import create_client, Client
@@ -16,1480 +20,556 @@ import requests
 from bs4 import BeautifulSoup
 import datetime
 
-# ================= 1. PAGE CONFIGURATION =================
-st.set_page_config(
-    page_title="ASIKERA AI",
-    page_icon="logo.png",
-    layout="wide",
-    initial_sidebar_state="auto"
-)
+# ================= ১. পেজ কনফিগারেশন ও API ক্লায়েন্ট =================
+# initial_sidebar_state="auto" দিলে মোবাইলে মেনু বাটনটা সবসময় দৃশ্যমান থাকে
+st.set_page_config(page_title="ASIKERA AI", page_icon="⚡", layout="wide", initial_sidebar_state="auto")
 
-# ================= 2. API CLIENTS =================
-groq_client = Groq(api_key=st.secrets["GROQ_API_KEY"])
-genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+def get_secret(name, default=None):
+    try:
+        value = st.secrets.get(name, default)
+    except Exception:
+        value = os.environ.get(name, default)
+    return value
 
-supabase: Client = create_client(
-    st.secrets["SUPABASE_URL"],
-    st.secrets["SUPABASE_KEY"]
-)
+GROQ_API_KEY = get_secret("GROQ_API_KEY")
+GEMINI_API_KEY = get_secret("GEMINI_API_KEY")
+SUPABASE_URL = get_secret("SUPABASE_URL")
+SUPABASE_KEY = get_secret("SUPABASE_KEY")
 
-# ================= 3. DATABASE FUNCTIONS =================
+# App can still show a setup message rather than crashing when secrets are not configured.
+groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+supabase: Client | None = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL and SUPABASE_KEY else None
+
+# ================= ২. ডেটাবেস ফাংশন (Supabase) =================
 def make_hashes(password):
-    return hashlib.sha256(str.encode(password)).hexdigest()
+    # PBKDF2 is deliberately slow; format is self-describing for future upgrades.
+    salt = os.urandom(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 310_000)
+    return "pbkdf2_sha256$310000$" + salt.hex() + "$" + digest.hex()
 
+def verify_password(password, stored_hash):
+    try:
+        if stored_hash.startswith("pbkdf2_sha256$"):
+            _, rounds, salt_hex, digest_hex = stored_hash.split("$", 3)
+            candidate = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), bytes.fromhex(salt_hex), int(rounds)).hex()
+            return hmac.compare_digest(candidate, digest_hex), False
+        # Backward compatibility for existing accounts; upgrade their hash after successful login.
+        legacy = hashlib.sha256(password.encode("utf-8")).hexdigest()
+        return hmac.compare_digest(legacy, stored_hash), True
+    except (ValueError, TypeError):
+        return False, False
 
 def create_user(email, password):
+    if not supabase:
+        return False
+    email = email.strip().lower()
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+        return False
     try:
-        supabase.table("users").insert({
-            "email": email,
-            "password": make_hashes(password)
-        }).execute()
+        supabase.table("users").insert({"email": email, "password": make_hashes(password)}).execute()
         return True
     except Exception:
         return False
 
-
 def login_user(email, password):
+    if not supabase:
+        return False
+    email = email.strip().lower()
     try:
-        response = (
-            supabase.table("users")
-            .select("password")
-            .eq("email", email)
-            .execute()
-        )
-
-        return bool(
-            response.data
-            and response.data[0]["password"]
-            == make_hashes(password)
-        )
+        response = supabase.table("users").select("password").eq("email", email).limit(1).execute()
+        if not response.data:
+            return False
+        stored = response.data[0]["password"]
+        ok, legacy = verify_password(password, stored)
+        if ok and legacy:
+            # Transparently upgrade legacy SHA-256 hashes after a successful login.
+            supabase.table("users").update({"password": make_hashes(password)}).eq("email", email).execute()
+        return ok
     except Exception:
         return False
 
-
 def save_chat(email, session_name, messages):
+    if not supabase:
+        return
     try:
-        supabase.table("chats").delete().eq(
-            "user_email", email
-        ).eq(
-            "session_name", session_name
-        ).execute()
-
-        supabase.table("chats").insert({
-            "user_email": email,
-            "session_name": session_name,
-            "messages": messages
-        }).execute()
-
-    except Exception:
-        pass
-
+        supabase.table("chats").delete().eq("user_email", email).eq("session_name", session_name).execute()
+        supabase.table("chats").insert({"user_email": email, "session_name": session_name, "messages": messages}).execute()
+    except: pass
 
 def load_chats(email):
-    try:
-        response = (
-            supabase.table("chats")
-            .select("session_name, messages")
-            .eq("user_email", email)
-            .execute()
-        )
-
-        sessions = {
-            row["session_name"]: row["messages"]
-            for row in response.data
-        }
-
-        return sessions if sessions else {"New Chat": []}
-
-    except Exception:
+    if not supabase:
         return {"New Chat": []}
+    try:
+        response = supabase.table("chats").select("session_name, messages").eq("user_email", email).execute()
+        sessions = {row["session_name"]: row["messages"] for row in response.data}
+        return sessions if sessions else {"New Chat": []}
+    except: return {"New Chat": []}
 
-
-# ================= 4. VOICE GENERATOR =================
+# ================= ৩. ভয়েস ও অডিও জেনারেটর (Edge-TTS) =================
 def generate_audio_edge(text, voice_type="Female"):
     try:
         lang = detect(text)
-
-        if lang == "bn":
-            voice = (
-                "bn-BD-NabanitaNeural"
-                if voice_type == "Female"
-                else "bn-BD-PradeepNeural"
-            )
+        if lang == 'bn':
+            voice = 'bn-BD-NabanitaNeural' if voice_type == "Female" else 'bn-BD-PradeepNeural'
         else:
-            voice = (
-                "en-US-AriaNeural"
-                if voice_type == "Female"
-                else "en-US-GuyNeural"
-            )
-
-    except Exception:
-        voice = "en-US-AriaNeural"
-
+            voice = 'en-US-AriaNeural' if voice_type == "Female" else 'en-US-GuyNeural'
+    except: voice = 'en-US-AriaNeural'
+        
     async def _generate():
         communicate = edge_tts.Communicate(text, voice)
         audio_data = b""
-
         async for chunk in communicate.stream():
-            if chunk["type"] == "audio":
-                audio_data += chunk["data"]
-
+            if chunk["type"] == "audio": audio_data += chunk["data"]
         return audio_data
-
     try:
-        loop = asyncio.new_event_loop()
+        loop = asyncio.new_event_loop(); asyncio.set_event_loop(loop)
+        return io.BytesIO(loop.run_until_complete(_generate()))
+    except: return None
 
-        try:
-            audio_data = loop.run_until_complete(_generate())
-            return io.BytesIO(audio_data)
-        finally:
-            loop.close()
-
-    except Exception:
-        return None
-
-
-# ================= 5. THEME SETTINGS =================
-if "theme" not in st.session_state:
-    st.session_state.theme = "Light"
+# ================= ৪. থিম সেটিংস (লাইট ও ডার্ক মোড) =================
+if "theme" not in st.session_state: st.session_state.theme = "Light"
 
 if st.session_state.theme == "Light":
-    bg_color = "#F4F6F8"
-    text_color = "#1A1A1A"
-    sidebar_bg = "#FFFFFF"
-    card_bg = "#FFFFFF"
-    border_color = "#E5E7EB"
-    input_bg = "#F9FAFB"
+    bg_color, text_color, sidebar_bg, card_bg = "#F4F6F8", "#1A1A1A", "#FFFFFF", "#FFFFFF"
+    border_color, input_bg = "#E5E7EB", "#F9FAFB"
 else:
-    bg_color = "#1E1E1E"
-    text_color = "#E0E0E0"
-    sidebar_bg = "#191919"
-    card_bg = "#25252D"
-    border_color = "#333333"
-    input_bg = "#2A2A2A"
+    bg_color, text_color, sidebar_bg, card_bg = "#1E1E1E", "#E0E0E0", "#191919", "#25252D"
+    border_color, input_bg = "#333333", "#2A2A2A"
 
-
-# ================= 6. CUSTOM CSS =================
 custom_css = f"""
 <style>
-@import url(
-'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap'
-);
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+.stApp {{ background: {bg_color}; font-family: 'Inter', sans-serif; color: {text_color}; }}
+[data-testid="stSidebar"] {{ background: {sidebar_bg}; border-right: 1px solid {border_color}; width: 280px !important; }}
 
-/* Main application */
-.stApp {{
-    background: {bg_color} !important;
-    font-family: 'Inter', sans-serif;
-    color: {text_color};
-}}
-
-/* Sidebar */
-[data-testid="stSidebar"] {{
-    background: {sidebar_bg} !important;
-    border-right: 1px solid {border_color};
-    width: 280px !important;
-}}
-
-/* IMPORTANT:
-   Never hide the complete Streamlit header.
-   The sidebar toggle is part of the header.
-*/
+/* ================= Header: transparent, sidebar toggle preserved ================= */
+#MainMenu {{ display: none !important; }}
+footer {{ display: none !important; }}
 [data-testid="stHeader"] {{
-    display: block !important;
-    visibility: visible !important;
     background: transparent !important;
     box-shadow: none !important;
     border: none !important;
-    z-index: 9999 !important;
+    z-index: 999999 !important;
 }}
+[data-testid="stDecoration"] {{ display: none !important; }}
 
-/* Hide the decoration line */
-[data-testid="stDecoration"] {{
-    display: none !important;
-}}
-
-/* Hide the default Streamlit menu and footer */
-#MainMenu {{
-    display: none !important;
-}}
-
-footer {{
-    display: none !important;
-}}
-
-/* Hide top-right toolbar actions where supported */
+/* Hide only the top-right toolbar actions (Share/Fork/Edit/Manage App), not the header */
 [data-testid="stToolbarActions"],
 [data-testid="stAppDeployButton"],
-[data-testid="stToolbar"] button[title="Share"],
-[data-testid="stToolbar"] button[aria-label="Share"],
-[data-testid="stToolbar"] button[title="Edit"],
-[data-testid="stToolbar"] button[aria-label="Edit"],
-[data-testid="stToolbar"] button[title="Fork"],
-[data-testid="stToolbar"] button[aria-label="Fork"],
+[data-testid="stToolbar"] button[title*="Share"],
+[data-testid="stToolbar"] button[aria-label*="Share"],
+[data-testid="stToolbar"] button[title*="Fork"],
+[data-testid="stToolbar"] button[aria-label*="Fork"],
+[data-testid="stToolbar"] button[title*="Edit"],
+[data-testid="stToolbar"] button[aria-label*="Edit"],
 [data-testid="stToolbar"] button[title*="Manage"],
-[data-testid="stToolbar"] button[aria-label*="Manage"],
-[data-testid="stToolbar"] a[title*="GitHub"],
-[data-testid="stToolbar"] a[aria-label*="GitHub"],
-[data-testid="stToolbar"] button[title*="GitHub"],
-[data-testid="stToolbar"] button[aria-label*="GitHub"] {{
+[data-testid="stToolbar"] button[aria-label*="Manage"] {{
     display: none !important;
     visibility: hidden !important;
-    pointer-events: none !important;
 }}
-
-/* Keep the toolbar container transparent */
 [data-testid="stToolbar"] {{
     background: transparent !important;
     box-shadow: none !important;
 }}
 
-/* Sidebar toggle: target only sidebar controls.
-   Do not apply this styling to every header button.
-*/
+/* Keep the sidebar open/close control visible and clickable */
+[data-testid="collapsedControl"],
 [data-testid="stSidebarCollapsedControl"],
-[data-testid="collapsedControl"] {{
+button[kind="header"] {{
+    display: flex !important;
     visibility: visible !important;
     opacity: 1 !important;
     pointer-events: auto !important;
-    z-index: 100000 !important;
-}}
-
-/* Main content */
-.block-container {{
-    padding-top: 3rem !important;
-    padding-bottom: 6rem !important;
-    max-width: 850px !important;
-    margin: 0 auto !important;
-}}
-
-/* Buttons */
-.stButton > button[kind="primary"] {{
-    background: #4D6BFE !important;
-    border-radius: 10px !important;
-    min-height: 40px;
-    font-weight: 600;
-    border: 0 !important;
-    color: white !important;
-}}
-
-.stButton > button[kind="secondary"] {{
-    background: {input_bg} !important;
-    border: 1px solid {border_color} !important;
-    border-radius: 10px !important;
     color: {text_color} !important;
-    padding: 5px;
-    font-size: 13px;
-}}
-
-/* Chat messages */
-div[data-testid="stChatMessage"] {{
-    background-color: transparent;
-    padding: 10px 0;
-    border: none;
-}}
-
-div[data-testid="stChatMessage"] h1,
-div[data-testid="stChatMessage"] h2,
-div[data-testid="stChatMessage"] h3,
-div[data-testid="stChatMessage"] h4,
-div[data-testid="stChatMessage"] strong {{
-    color: {text_color} !important;
-    margin-top: 15px !important;
-    margin-bottom: 10px !important;
-}}
-
-div[data-testid="stChatMessage"] p,
-div[data-testid="stChatMessage"] li {{
-    color: {text_color} !important;
-    font-size: 15px !important;
-    line-height: 1.6;
-}}
-
-div[data-testid="stChatMessage"] table {{
-    display: block !important;
-    overflow-x: auto !important;
-    border-collapse: collapse !important;
-    margin: 15px 0 !important;
-    width: 100% !important;
-}}
-
-div[data-testid="stChatMessage"] table th,
-div[data-testid="stChatMessage"] table td {{
-    color: {text_color} !important;
-    border: 1px solid {border_color} !important;
-    padding: 10px !important;
-    background-color: {input_bg} !important;
-}}
-
-div[data-testid="stChatMessage"] pre {{
-    background-color: {input_bg} !important;
-    border: 1px solid {border_color} !important;
+    background-color: {border_color} !important;
     border-radius: 8px !important;
-    padding: 12px !important;
-    overflow-x: auto !important;
+    position: fixed !important;
+    top: 15px !important;
+    left: 15px !important;
+    z-index: 1000000 !important;
 }}
-
-div[data-testid="stChatMessage"] code {{
-    color: #DC2626 !important;
-    background-color: transparent !important;
-    font-family: 'Courier New', monospace !important;
-}}
-
-div[data-testid="stChatMessage"]:has(
-    div[data-testid="stChatMessageAvatarUser"]
-) {{
-    flex-direction: row-reverse;
-    text-align: right;
-    margin-left: auto;
-    margin-right: 0;
-    width: fit-content;
-    max-width: 85%;
-}}
-
-div[data-testid="stChatMessage"]:has(
-    div[data-testid="stChatMessageAvatarUser"]
-) .stMarkdown {{
-    background: {input_bg};
-    border: 1px solid {border_color};
-    padding: 12px 18px;
-    border-radius: 20px 20px 4px 20px;
-    display: inline-block;
-}}
-
-div[data-testid="stChatMessage"]:has(
-    div[data-testid="stChatMessageAvatarAssistant"]
-) {{
-    margin-right: auto;
-    margin-left: 0;
-    width: 100%;
-}}
-
-div[data-testid="stChatMessage"]:has(
-    div[data-testid="stChatMessageAvatarAssistant"]
-) .stMarkdown {{
-    background: {card_bg};
-    border: 1px solid {border_color};
-    padding: 18px 20px;
-    border-radius: 20px 20px 20px 4px;
-    display: inline-block;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-    width: 100%;
-}}
-
-/* Text input */
-div[data-testid="stTextInput"] input {{
-    background-color: {input_bg} !important;
-    color: {text_color} !important;
-    border: 1px solid {border_color} !important;
-    border-radius: 10px !important;
-}}
-
-/* Chat input */
-div[data-testid="stChatInput"] {{
-    background-color: {card_bg} !important;
-    border-radius: 12px !important;
-    border: 1px solid {border_color} !important;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-}}
-
-div[data-testid="stChatInput"] > div {{
-    background-color: {card_bg} !important;
-}}
-
-div[data-testid="stChatInput"] textarea {{
-    color: {text_color} !important;
-    background-color: transparent !important;
-}}
-
-div[data-testid="stChatInput"] button {{
-    background: #4D6BFE !important;
-    border-radius: 8px !important;
-}}
-
-div[data-testid="stChatInput"] button svg {{
-    fill: white !important;
-}}
-
-/* Select box */
-div[data-testid="stSelectbox"] div[data-baseweb="select"] > div {{
-    background-color: {input_bg} !important;
-    color: {text_color} !important;
-    border: 1px solid {border_color} !important;
-}}
-
-/* Sidebar text */
-.sidebar-title {{
-    font-size: 20px;
-    font-weight: 700;
-    color: {text_color};
-    margin: 0;
-}}
-
-.sidebar-subtitle {{
-    font-size: 10px;
-    color: #6B7280;
-    letter-spacing: 1.5px;
-    margin-top: 5px;
-}}
-
-.divider {{
-    border-top: 1px solid {border_color};
-    margin: 15px 0;
-}}
-
-.label-text {{
-    font-size: 12px;
-    color: #6B7280;
-    margin-bottom: 8px;
-    font-weight: 600;
-    text-transform: uppercase;
-}}
-
-.user-card {{
-    display: flex;
-    align-items: center;
-    background: {input_bg};
-    padding: 10px;
-    border-radius: 10px;
-    border: 1px solid {border_color};
-    margin-bottom: 10px;
-}}
-
-.user-avatar {{
-    background: #4D6BFE;
-    color: white;
-    border-radius: 50%;
-    width: 28px;
-    height: 28px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-right: 12px;
-}}
-
-.user-email {{
-    font-size: 12px;
-    color: {text_color};
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}}
-
-/* Mobile layout */
 @media (max-width: 768px) {{
-    [data-testid="stHeader"] {{
-        display: block !important;
-        visibility: visible !important;
-        background: transparent !important;
-    }}
-
+    [data-testid="stHeader"] {{ background: transparent !important; }}
+    [data-testid="collapsedControl"],
     [data-testid="stSidebarCollapsedControl"],
-    [data-testid="collapsedControl"] {{
+    button[kind="header"] {{
+        display: flex !important;
         visibility: visible !important;
         opacity: 1 !important;
         pointer-events: auto !important;
-        z-index: 100000 !important;
-    }}
-
-    .block-container {{
-        padding-top: 3.5rem !important;
-        padding-bottom: 6rem !important;
-        padding-left: 1rem !important;
-        padding-right: 1rem !important;
     }}
 }}
+
+.block-container {{ padding-top: 3rem !important; padding-bottom: 6rem !important; max-width: 850px !important; margin: 0 auto !important; }}
+.stButton>button[kind="primary"] {{ background: #4D6BFE; border-radius: 10px; height: 40px; font-weight: 600; border: 0; color: white; }}
+.stButton>button[kind="secondary"] {{ background: {input_bg}; border: 1px solid {border_color}; border-radius: 10px; color: {text_color}; padding: 5px; font-size: 13px; }}
+
+div[data-testid="stChatMessage"] {{ background-color: transparent; padding: 10px 0; border: none; }}
+div[data-testid="stChatMessage"] h1, div[data-testid="stChatMessage"] h2, div[data-testid="stChatMessage"] h3, div[data-testid="stChatMessage"] h4, div[data-testid="stChatMessage"] strong {{ color: {text_color} !important; margin-top: 15px !important; margin-bottom: 10px !important; }}
+div[data-testid="stChatMessage"] p, div[data-testid="stChatMessage"] li {{ color: {text_color} !important; font-size: 15px !important; line-height: 1.6; }}
+
+div[data-testid="stChatMessage"] table {{ display: block !important; overflow-x: auto !important; border-collapse: collapse !important; margin: 15px 0 !important; width: 100% !important; }}
+div[data-testid="stChatMessage"] table th, div[data-testid="stChatMessage"] table td {{ color: {text_color} !important; border: 1px solid {border_color} !important; padding: 10px !important; background-color: {input_bg} !important; }}
+
+div[data-testid="stChatMessage"] pre {{ background-color: {input_bg} !important; border: 1px solid {border_color} !important; border-radius: 8px !important; padding: 12px !important; }}
+div[data-testid="stChatMessage"] code {{ color: #DC2626 !important; background-color: transparent !important; font-family: 'Courier New', monospace !important; }}
+
+div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"]) {{ flex-direction: row-reverse; text-align: right; margin-left: auto; margin-right: 0; width: fit-content; max-width: 85%; }}
+div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"]) .stMarkdown {{ background: {input_bg}; border: 1px solid {border_color}; padding: 12px 18px; border-radius: 20px 20px 4px 20px; display: inline-block; }}
+div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) {{ margin-right: auto; margin-left: 0; width: 100%; }}
+div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) .stMarkdown {{ background: {card_bg}; border: 1px solid {border_color}; padding: 18px 20px; border-radius: 20px 20px 20px 4px; display: inline-block; box-shadow: 0 2px 8px rgba(0,0,0,0.04); width: 100%; }}
+
+div[data-testid="stTextInput"] input {{ background-color: {input_bg} !important; color: {text_color} !important; border: 1px solid {border_color} !important; border-radius: 10px !important; }}
+div[data-testid="stChatInput"] {{ background-color: {card_bg} !important; border-radius: 12px !important; border: 1px solid {border_color} !important; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }}
+div[data-testid="stChatInput"] > div {{ background-color: {card_bg} !important; }}
+div[data-testid="stChatInput"] textarea {{ color: {text_color} !important; background-color: transparent !important; }}
+div[data-testid="stChatInput"] button {{ background: #4D6BFE !important; border-radius: 8px !important; }}
+div[data-testid="stChatInput"] button svg {{ fill: white !important; }}
+div[data-testid="stSelectbox"] div[data-baseweb="select"] > div {{ background-color: {input_bg} !important; color: {text_color} !important; border: 1px solid {border_color} !important; }}
+
+.sidebar-title {{ font-size: 20px; font-weight: 700; color: {text_color}; margin: 0; }}
+.sidebar-subtitle {{ font-size: 10px; color: #6B7280; letter-spacing: 1.5px; margin-top: 5px; }}
+.divider {{ border-top: 1px solid {border_color}; margin: 15px 0; }}
+.label-text {{ font-size: 12px; color: #6B7280; margin-bottom: 8px; font-weight: 600; text-transform: uppercase; }}
+.user-card {{ display: flex; align-items: center; background: {input_bg}; padding: 10px; border-radius: 10px; border: 1px solid {border_color}; margin-bottom: 10px; }}
+.user-avatar {{ background: #4D6BFE; color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; margin-right: 12px; }}
+.user-email {{ font-size: 12px; color: {text_color}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
 </style>
 """
 
-
-# ================= 7. SESSION STATE =================
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-
-if "user_email" not in st.session_state:
-    st.session_state.user_email = ""
-
-# ================= 8. LOGIN PAGE =================
-if not st.session_state.logged_in and "email" in st.query_params:
-    st.session_state.logged_in = True
-    st.session_state.user_email = st.query_params["email"]
-    st.rerun()
+# ================= ৫. লগইন পেজ =================
+if "logged_in" not in st.session_state: st.session_state.logged_in = False
+if "user_email" not in st.session_state: st.session_state.user_email = ""
 
 if not st.session_state.logged_in:
-
-    st.markdown(custom_css, unsafe_allow_html=True)
-
+    if not supabase:
+        st.warning("Supabase configuration is missing. Add SUPABASE_URL and SUPABASE_KEY in Streamlit Secrets before using login/signup.")
     st.markdown(f"""
     <style>
-    .stApp {{
-        background:
-            radial-gradient(
-                circle at 10% 20%,
-                rgba(139, 92, 246, 0.15),
-                transparent 40%
-            ),
-            radial-gradient(
-                circle at 90% 80%,
-                rgba(59, 130, 246, 0.15),
-                transparent 40%
-            ),
-            {bg_color} !important;
-    }}
-
-    div[data-testid="stForm"] {{
-        background: rgba(255, 255, 255, 0.8) !important;
-        backdrop-filter: blur(20px) !important;
-        border: 1px solid rgba(0, 0, 0, 0.05) !important;
-        border-radius: 20px !important;
-        padding: 40px !important;
-        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08) !important;
-    }}
-
-    div[data-testid="stTextInput"] input {{
-        background-color: #FFFFFF !important;
-        color: #111827 !important;
-        border: 1px solid #D1D5DB !important;
-    }}
-
-    div[data-testid="stFormSubmitButton"] > button {{
-        background: linear-gradient(
-            135deg, #8B5CF6, #3B82F6
-        ) !important;
-        border: none !important;
-        color: white !important;
-        font-weight: 600 !important;
-    }}
+    .stApp {{ background: radial-gradient(circle at 10% 20%, rgba(139, 92, 246, 0.15), transparent 40%), radial-gradient(circle at 90% 80%, rgba(59, 130, 246, 0.15), transparent 40%), {bg_color} !important; }}
+    div[data-testid="stForm"] {{ background: rgba(255, 255, 255, 0.8) !important; backdrop-filter: blur(20px) !important; border: 1px solid rgba(0, 0, 0, 0.05) !important; border-radius: 20px !important; padding: 40px !important; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08) !important; }}
+    div[data-testid="stTextInput"] input {{ background-color: #FFFFFF !important; color: #111827 !important; border: 1px solid #D1D5DB !important; }}
+    div[data-testid="stFormSubmitButton"] > button {{ background: linear-gradient(135deg, #8B5CF6, #3B82F6) !important; border: none !important; color: white !important; font-weight: 600 !important; }}
     </style>
     """, unsafe_allow_html=True)
-
+    
     col1, col2, col3 = st.columns([1, 1.2, 1])
-
     with col2:
-        st.markdown(
-            """
-            <h1 style="text-align:center;font-weight:800;">
-                ⚡ ASIKERA
-            </h1>
-            <p style="text-align:center;color:#6B7280;
-            letter-spacing:2px;font-size:11px;">
-                ASIKUL'S KNOWLEDGE ERA
-            </p>
-            """,
-            unsafe_allow_html=True
-        )
-
+        st.markdown("<h1 style='text-align: center; font-weight: 800;'>⚡ ASIKERA</h1><p style='text-align: center; color: #6B7280; letter-spacing: 2px; font-size: 11px;'>ASIKUL'S KNOWLEDGE ERA</p>", unsafe_allow_html=True)
         tab1, tab2 = st.tabs(["Login", "Sign Up"])
-
         with tab1:
             with st.form("login_form"):
-                l_email = st.text_input(
-                    "Email",
-                    placeholder="you@company.com"
-                )
-
-                l_pass = st.text_input(
-                    "Password",
-                    type="password",
-                    placeholder="••••••••"
-                )
-
-                if st.form_submit_button(
-                    "Login",
-                    use_container_width=True
-                ):
+                l_email = st.text_input("Email", placeholder="you@company.com")
+                l_pass = st.text_input("Password", type="password", placeholder="••••••••")
+                if st.form_submit_button("Login", use_container_width=True):
                     if login_user(l_email, l_pass):
                         st.session_state.logged_in = True
-                        st.session_state.user_email = l_email
-                        st.query_params["email"] = l_email
+                        st.session_state.user_email = l_email.strip().lower()
                         st.rerun()
-                    else:
-                        st.error("Invalid credentials.")
-
+                    else: st.error("Invalid credentials.")
         with tab2:
             with st.form("signup_form"):
-                s_email = st.text_input(
-                    "Email",
-                    placeholder="you@company.com"
-                )
-
-                s_pass = st.text_input(
-                    "Password",
-                    type="password",
-                    placeholder="Min 6 characters"
-                )
-
-                if st.form_submit_button(
-                    "Sign Up",
-                    use_container_width=True
-                ):
-                    if len(s_pass) < 6:
-                        st.warning("Password too short.")
-                    elif create_user(s_email, s_pass):
-                        st.success(
-                            "Account created! Please login."
-                        )
-                    else:
-                        st.error("Email already registered.")
-
+                s_email = st.text_input("Email", placeholder="you@company.com")
+                s_pass = st.text_input("Password", type="password", placeholder="Min 6 characters")
+                if st.form_submit_button("Sign Up", use_container_width=True):
+                    if len(s_pass) < 6: st.warning("Password too short.")
+                    elif create_user(s_email, s_pass): st.success("Account created! Please login.")
+                    else: st.error("Email already registered.")
     st.stop()
 
-
-# ================= 9. MAIN APPLICATION =================
+# ================= ৬. মেইন অ্যাপ লজিক =================
 st.markdown(custom_css, unsafe_allow_html=True)
 
 if "chat_sessions" not in st.session_state:
-    st.session_state.chat_sessions = load_chats(
-        st.session_state.user_email
-    )
-
-if not st.session_state.chat_sessions:
-    st.session_state.chat_sessions = {"New Chat": []}
-
+    st.session_state.chat_sessions = load_chats(st.session_state.user_email)
 if "current_session" not in st.session_state:
-    st.session_state.current_session = next(
-        iter(st.session_state.chat_sessions)
-    )
+    st.session_state.current_session = list(st.session_state.chat_sessions.keys())[0]
 
-if st.session_state.current_session not in st.session_state.chat_sessions:
-    st.session_state.current_session = next(
-        iter(st.session_state.chat_sessions)
-    )
-
-
-# ================= 10. AI MODES =================
 CATEGORIES = [
-    "💬 General Chat",
-    "🎓 English Tutor",
-    "👨‍💻 Coding Assistant",
-    "📚 Learning & Study",
-    "✍️ Writing & Editing",
-    "🔍 Deep Research",
-    "🎨 Image Generation",
-    "📄 File/PDF Analyzer",
-    "🌐 Web Search",
-    "📊 Data Analysis",
-    "🌍 Translator",
-    "🔗 URL Reader",
-    "🤖 Custom Persona",
-    "📝 Text Summarizer",
-    "💡 Idea Generator",
-    "📧 Email Writer",
-    "📱 Social Media Post",
-    "📖 Story Writer",
-    "🎯 IELTS Writing Evaluator",
-    "🗣️ Interview Preparer",
-    "✈️ Travel Planner",
-    "🍳 Recipe Creator",
-    "💪 Fitness Coach",
-    "🧠 Psychology Advisor",
-    "⚖️ Legal Advisor (Basic)",
-    "🎬 Movie Recommender",
-    "🎵 Music Recommender",
-    "💰 Finance Advisor",
-    "📈 Marketing Strategist",
+    "💬 General Chat", "🎓 English Tutor", "👨‍💻 Coding Assistant", 
+    "📚 Learning & Study", "✍️ Writing & Editing", "🔍 Deep Research", 
+    "🎨 Image Generation", "📄 File/PDF Analyzer", "🌐 Web Search", 
+    "📊 Data Analysis", "🌍 Translator", "🔗 URL Reader", 
+    "🤖 Custom Persona", "📝 Text Summarizer", "💡 Idea Generator",
+    "📧 Email Writer", "📱 Social Media Post", "📖 Story Writer",
+    "🎯 IELTS Writing Evaluator", "🗣️ Interview Preparer",
+    "✈️ Travel Planner", "🍳 Recipe Creator", "💪 Fitness Coach",
+    "🧠 Psychology Advisor", "⚖️ Legal Advisor (Basic)",
+    "🎬 Movie Recommender", "🎵 Music Recommender",
+    "💰 Finance Advisor", "📈 Marketing Strategist",
     "🛠️ Task Automation"
 ]
 
-
-# ================= 11. SIDEBAR =================
 with st.sidebar:
-
     col_logo, col_text = st.columns([1, 3])
-
     with col_logo:
-        try:
-            st.image("logo.png", use_container_width=True)
-        except Exception:
-            st.markdown("⚡")
-
+        try: st.image("logo.png", use_container_width=True)
+        except: st.markdown("⚡")
     with col_text:
-        st.markdown(
-            """
-            <div style="padding-top:5px;">
-                <div class="sidebar-title">ASIKERA</div>
-                <div class="sidebar-subtitle">
-                    KNOWLEDGE ERA
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-    st.write("")
-
-    if st.button(
-        "＋ New Chat",
-        use_container_width=True,
-        type="primary"
-    ):
+        st.markdown(f"""<div style='padding-top: 5px;'><div class="sidebar-title">ASIKERA</div><div class="sidebar-subtitle">KNOWLEDGE ERA</div></div>""", unsafe_allow_html=True)
+        
+    st.write("") 
+    if st.button("＋ New Chat", use_container_width=True, type="primary"):
         new_id = f"Chat {len(st.session_state.chat_sessions) + 1}"
-
-        while new_id in st.session_state.chat_sessions:
-            new_id = f"Chat {len(st.session_state.chat_sessions) + 1}-{datetime.datetime.now().timestamp():.0f}"
-
         st.session_state.chat_sessions[new_id] = []
         st.session_state.current_session = new_id
         st.rerun()
-
-    sidebar_search = st.text_input(
-        "Search",
-        placeholder="Search chats...",
-        label_visibility="collapsed"
-    )
-
-    st.markdown(
-        '<div class="divider"></div>',
-        unsafe_allow_html=True
-    )
-
-    st.markdown(
-        '<div class="label-text">✨ 30+ Modes</div>',
-        unsafe_allow_html=True
-    )
-
-    selected_category = st.selectbox(
-        "Select Mode",
-        CATEGORIES,
-        label_visibility="collapsed"
-    )
-
-    theme_toggle = st.checkbox(
-        "🌙 Dark Mode"
-        if st.session_state.theme == "Light"
-        else "☀️ Light Mode"
-    )
-
+        
+    search_query = st.text_input("Search", placeholder="Search chats...", label_visibility="collapsed")
+    
+    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="label-text">✨ 30+ Modes</div>', unsafe_allow_html=True)
+    selected_category = st.selectbox("Select Mode", CATEGORIES, label_visibility="collapsed")
+    
+    theme_toggle = st.checkbox("🌙 Dark Mode" if st.session_state.theme == "Light" else "☀️ Light Mode")
     if theme_toggle:
-        st.session_state.theme = (
-            "Dark"
-            if st.session_state.theme == "Light"
-            else "Light"
-        )
+        st.session_state.theme = "Dark" if st.session_state.theme == "Light" else "Light"
         st.rerun()
-
-    voice_gender = st.radio(
-        "Voice",
-        ["Female", "Male"],
-        horizontal=True
-    )
-
+        
+    voice_gender = st.radio("Voice", ["Female", "Male"], horizontal=True)
+    chat_provider = st.selectbox("AI Provider", ["Groq", "Gemini"], index=0, help="Groq powers text chat by default; Gemini can be selected here. File and image analysis continue to use Gemini.")
+    
     custom_persona = ""
-
     if selected_category == "🤖 Custom Persona":
-        custom_persona = st.text_area(
-            "Define AI Personality:",
-            "You are a helpful assistant."
-        )
-
-    base_identity = (
-        "You are ASIKERA. Do not mention OpenAI or Google. "
-    )
-
+        custom_persona = st.text_area("Define AI Personality:", "You are a helpful assistant.")
+    
+    # প্রম্পট ইঞ্জিন
+    base_identity = "You are ASIKERA. Do not mention OpenAI or Google. "
     prompts = {
-        "🎓 English Tutor":
-            "You are Sir English, an elite IELTS examiner. "
-            "Correct grammar and explain in Bengali.",
-
-        "👨‍💻 Coding Assistant":
-            "You are an expert programmer. Write clean, optimized code.",
-
-        "📚 Learning & Study":
-            "You are a brilliant tutor. Explain concepts simply.",
-
-        "✍️ Writing & Editing":
-            "You are a professional editor. Fix grammar and improve tone.",
-
-        "🔍 Deep Research":
-            "You are a research assistant. Synthesize detailed reports.",
-
-        "📝 Text Summarizer":
-            "You are an expert summarizer. Extract key points into bullet points.",
-
-        "💡 Idea Generator":
-            "You are a creative brainstormer. Generate 10 unique ideas.",
-
-        "📧 Email Writer":
-            "You are a professional email writer. Write clear and polite emails.",
-
-        "📱 Social Media Post":
-            "You are a social media manager. Write engaging posts.",
-
-        "📖 Story Writer":
-            "You are a creative storyteller. Write engaging stories.",
-
-        "🎯 IELTS Writing Evaluator":
-            "You are an IELTS examiner. Evaluate writing on a 1-9 scale and explain errors.",
-
-        "🗣️ Interview Preparer":
-            "You are an HR manager. Ask interview questions and evaluate answers.",
-
-        "✈️ Travel Planner":
-            "You are a travel planner. Create detailed itineraries.",
-
-        "🍳 Recipe Creator":
-            "You are a chef. Provide recipes with ingredients and steps.",
-
-        "💪 Fitness Coach":
-            "You are a fitness coach. Provide general fitness guidance.",
-
-        "🧠 Psychology Advisor":
-            "You are a compassionate assistant. Offer supportive, practical guidance.",
-
-        "⚖️ Legal Advisor (Basic)":
-            "You provide general legal information, not legal representation.",
-
-        "🎬 Movie Recommender":
-            "You recommend movies based on user preferences.",
-
-        "🎵 Music Recommender":
-            "You recommend music based on user preferences.",
-
-        "💰 Finance Advisor":
-            "You provide general financial education and budgeting ideas.",
-
-        "📈 Marketing Strategist":
-            "You are a marketing strategist. Create practical marketing plans.",
-
-        "🛠️ Task Automation":
-            "You are an automation expert. Create clear workflows.",
-
-        "🤖 Custom Persona":
-            custom_persona if custom_persona else "You are a helpful AI."
+        "🎓 English Tutor": "You are Sir English, an elite IELTS examiner. Correct grammar, explain in Bengali.",
+        "👨‍💻 Coding Assistant": "You are an expert programmer. Write clean, optimized code.",
+        "📚 Learning & Study": "You are a brilliant tutor. Explain concepts simply.",
+        "✍️ Writing & Editing": "You are a professional editor. Fix grammar and improve tone.",
+        "🔍 Deep Research": "You are a deep research agent. Synthesize detailed reports.",
+        "📝 Text Summarizer": "You are an expert summarizer. Extract key points into bullet points.",
+        "💡 Idea Generator": "You are a creative brainstormer. Generate 10 unique ideas.",
+        "📧 Email Writer": "You are a professional email writer. Write clear and polite emails.",
+        "📱 Social Media Post": "You are a viral social media manager. Write engaging posts with emojis.",
+        "📖 Story Writer": "You are a creative novelist. Write engaging stories.",
+        "🎯 IELTS Writing Evaluator": "You are an IELTS examiner. Grade the writing on a 1-9 scale and explain errors.",
+        "🗣️ Interview Preparer": "You are an HR manager. Ask interview questions and evaluate the answers.",
+        "✈️ Travel Planner": "You are a travel agent. Create detailed itineraries.",
+        "🍳 Recipe Creator": "You are a master chef. Provide recipes with ingredients and steps.",
+        "💪 Fitness Coach": "You are a fitness coach. Provide workout plans and diet advice.",
+        "🧠 Psychology Advisor": "You are a compassionate psychologist. Provide emotional support.",
+        "⚖️ Legal Advisor (Basic)": "You are a legal advisor. Provide general legal information.",
+        "🎬 Movie Recommender": "You are a movie buff. Recommend movies based on preferences.",
+        "🎵 Music Recommender": "You are a music expert. Recommend songs.",
+        "💰 Finance Advisor": "You are a financial advisor. Provide money-saving and investment tips.",
+        "📈 Marketing Strategist": "You are a marketing expert. Create marketing plans.",
+        "🛠️ Task Automation": "You are an automation expert. Create step-by-step workflows.",
+        "🤖 Custom Persona": custom_persona if custom_persona else "You are a smart AI."
     }
+    persona_prompt = base_identity + prompts.get(selected_category, "You are a smart and helpful AI.")
 
-    persona_prompt = base_identity + prompts.get(
-        selected_category,
-        "You are a smart and helpful AI."
-    )
+    if st.session_state.chat_sessions[st.session_state.current_session]:
+        chat_text = "\n\n".join([f"{m['role'].upper()}: {m['content']}" for m in st.session_state.chat_sessions[st.session_state.current_session]])
+        st.download_button("📥 Export Chat (TXT)", data=chat_text, file_name="asikera_chat.txt", use_container_width=True)
 
-    current_sidebar_messages = st.session_state.chat_sessions[
-        st.session_state.current_session
-    ]
-
-    if current_sidebar_messages:
-        chat_text = "\n\n".join([
-            f"{m['role'].upper()}: {m['content']}"
-            for m in current_sidebar_messages
-        ])
-
-        st.download_button(
-            "📥 Export Chat (TXT)",
-            data=chat_text,
-            file_name="asikera_chat.txt",
-            use_container_width=True
-        )
-
-    st.markdown(
-        '<div class="divider"></div>',
-        unsafe_allow_html=True
-    )
-
-    st.markdown(
-        '<div class="label-text">Recent</div>',
-        unsafe_allow_html=True
-    )
-
-    filtered_sessions = [
-        name
-        for name in st.session_state.chat_sessions
-        if sidebar_search.lower() in name.lower()
-    ]
-
-    for session_name in filtered_sessions:
-        if st.button(
-            f"💬 {session_name}",
-            key=f"session_{session_name}",
-            use_container_width=True,
-            type="secondary"
-        ):
-            st.session_state.current_session = session_name
+    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="label-text">Recent</div>', unsafe_allow_html=True)
+    
+    filtered_sessions = [s for s in st.session_state.chat_sessions.keys() if search_query.lower() in s.lower()]
+    for s in filtered_sessions:
+        if st.button(f"💬 {s}", use_container_width=True, type="secondary"):
+            st.session_state.current_session = s
             st.rerun()
-
-    st.markdown(
-        '<div class="divider"></div>',
-        unsafe_allow_html=True
-    )
-
-    st.markdown(
-        f"""
-        <div class="user-card">
-            <div class="user-avatar">👤</div>
-            <div class="user-email">
-                {st.session_state.user_email}
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-    if st.button(
-        "Logout",
-        use_container_width=True,
-        type="secondary"
-    ):
+            
+    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+    st.markdown(f"""<div class="user-card"><div class="user-avatar">👤</div><div class="user-email">{st.session_state.user_email}</div></div>""", unsafe_allow_html=True)
+    
+    if st.button("Logout", use_container_width=True, type="secondary"):
         st.session_state.logged_in = False
         st.session_state.user_email = ""
-        st.query_params.clear()
+        st.session_state.pop("chat_sessions", None)
+        st.session_state.pop("current_session", None)
         st.rerun()
 
+# ================= ৭. ডাইনামিক টুলস এক্সিকিউশন =================
+current_messages = st.session_state.chat_sessions[st.session_state.current_session]
 
-# ================= 12. ACTIVE CHAT =================
-current_messages = st.session_state.chat_sessions[
-    st.session_state.current_session
-]
-
-
-# ================= 13. IMAGE GENERATION =================
 if selected_category == "🎨 Image Generation":
-
     st.markdown("### 🎨 AI Image Generator")
-
-    img_prompt = st.text_input(
-        "Describe your image:"
-    )
-
+    img_prompt = st.text_input("Describe your image:")
     if st.button("Generate Image", type="primary") and img_prompt:
         with st.spinner("Painting..."):
-            try:
-                image_url = (
-                    "https://image.pollinations.ai/prompt/"
-                    f"{urllib.parse.quote(img_prompt)}"
-                    "?width=1024&height=1024&nologo=true"
-                )
+            image_url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(img_prompt)}?width=1024&height=1024&nologo=true"
+            st.image(image_url, use_container_width=True)
 
-                st.image(
-                    image_url,
-                    use_container_width=True
-                )
-
-            except Exception as e:
-                st.error(f"Image generation error: {e}")
-
-
-# ================= 14. FILE / PDF ANALYZER =================
 elif selected_category == "📄 File/PDF Analyzer":
-
     st.markdown("### 📄 File Analyzer")
-
-    uploaded_file = st.file_uploader(
-        "Upload PDF or Image",
-        type=["pdf", "png", "jpg", "jpeg"]
-    )
-
-    file_query = st.text_input(
-        "What do you want to know about this file?"
-    )
-
-    if (
-        st.button("Analyze File", type="primary")
-        and uploaded_file
-        and file_query
-    ):
+    uploaded_file = st.file_uploader("Upload PDF or Image", type=["pdf", "png", "jpg", "jpeg"])
+    file_query = st.text_input("What do you want to know about this file?")
+    if st.button("Analyze File", type="primary") and uploaded_file and file_query:
         with st.spinner("Analyzing..."):
             try:
-                gemini_model = genai.GenerativeModel(
-                    "gemini-1.5-flash"
-                )
-
-                response = gemini_model.generate_content([
-                    file_query,
-                    {
-                        "mime_type": uploaded_file.type,
-                        "data": uploaded_file.getvalue()
-                    }
-                ])
-
+                if not GEMINI_API_KEY:
+                    raise RuntimeError("Add GEMINI_API_KEY to Streamlit Secrets.")
+                gemini_model = genai.GenerativeModel(get_secret("GEMINI_MODEL", "gemini-2.5-flash"))
+                response = gemini_model.generate_content([file_query, {"mime_type": uploaded_file.type, "data": uploaded_file.getvalue()}])
                 st.markdown(response.text)
+            except Exception as e: st.error(f"Error: {e}")
 
-            except Exception as e:
-                st.error(f"File analysis error: {e}")
-
-
-# ================= 15. DATA ANALYSIS =================
 elif selected_category == "📊 Data Analysis":
-
     st.markdown("### 📊 Data Visualization")
-
-    csv_file = st.file_uploader(
-        "Upload CSV",
-        type=["csv"]
-    )
-
+    csv_file = st.file_uploader("Upload CSV", type=["csv"])
     if csv_file:
-        try:
-            df = pd.read_csv(csv_file)
-            st.write("Data Preview:", df.head())
-
-            chart_prompt = st.text_input(
-                "Ask AI to draw a chart "
-                "(e.g., Draw a bar chart of Sales)"
-            )
-
-            if (
-                st.button("Generate Chart", type="primary")
-                and chart_prompt
-            ):
-                with st.spinner("Generating..."):
-
-                    sys_prompt = (
-                        "Write ONLY Python code using "
-                        "'plotly.express as px' for DataFrame 'df' "
-                        f"with columns {list(df.columns)}. "
-                        "Store result in 'fig'."
-                    )
-
-                    res = groq_client.chat.completions.create(
-                        model="openai/gpt-oss-120b",
-                        messages=[
-                            {
-                                "role": "system",
-                                "content": sys_prompt
-                            },
-                            {
-                                "role": "user",
-                                "content": chart_prompt
-                            }
-                        ],
-                        temperature=0.1
-                    )
-
-                    code = (
-                        res.choices[0].message.content
-                        .replace("```python", "")
-                        .replace("```", "")
-                        .strip()
-                    )
-
-                    # WARNING:
-                    # Executing AI-generated Python code can be unsafe.
-                    # Only use this feature in a trusted environment.
-                    local_vars = {
-                        "df": df,
-                        "px": px
-                    }
-
-                    exec(code, {"__builtins__": {}}, local_vars)
-
-                    if "fig" not in local_vars:
-                        st.error("The AI did not generate a valid chart.")
+        df = pd.read_csv(csv_file)
+        st.write("Data Preview:", df.head())
+        chart_prompt = st.text_input("Ask AI to draw a chart (e.g., 'Draw a bar chart of Sales')")
+        if st.button("Generate Chart", type="primary") and chart_prompt:
+            with st.spinner("Generating..."):
+                try:
+                    if not groq_client:
+                        st.error("Chart AI needs GROQ_API_KEY in Streamlit Secrets.")
                     else:
-                        st.plotly_chart(
-                            local_vars["fig"],
-                            use_container_width=True
-                        )
+                        sys_prompt = ("Return ONLY valid JSON with keys chart_type, x, y. "
+                                      "chart_type must be one of bar, line, scatter, histogram, pie, box. "
+                                      f"x and y must be exact column names from {list(df.columns)}. "
+                                      "For histogram use x as the numeric column and y as null. For pie use categorical x and numeric y.")
+                        res = groq_client.chat.completions.create(model=get_secret("GROQ_MODEL", "openai/gpt-oss-120b"), messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": chart_prompt}], temperature=0.1)
+                        spec = json.loads(res.choices[0].message.content.strip().replace("```json", "").replace("```", ""))
+                        chart_type = spec.get("chart_type")
+                        x_col, y_col = spec.get("x"), spec.get("y")
+                        allowed = {"bar": px.bar, "line": px.line, "scatter": px.scatter, "histogram": px.histogram, "pie": px.pie, "box": px.box}
+                        if chart_type not in allowed or x_col not in df.columns or (y_col is not None and y_col not in df.columns):
+                            st.error("The chart suggestion used an unsupported chart type or column. Please rephrase your request.")
+                        else:
+                            kwargs = {"x": x_col}
+                            if chart_type != "histogram" and y_col is not None:
+                                kwargs["y"] = y_col
+                            fig = allowed[chart_type](df, **kwargs, title=chart_prompt)
+                            st.plotly_chart(fig, use_container_width=True)
+                except Exception as e: st.error(f"Error: {e}")
 
-        except Exception as e:
-            st.error(f"Data analysis error: {e}")
-
-
-# ================= 16. WEB SEARCH =================
 elif selected_category == "🌐 Web Search":
-
     st.markdown("### 🌐 Live Web Search")
-
     search_query = st.text_input("Search the web:")
-
     if st.button("Search", type="primary") and search_query:
         with st.spinner("Searching..."):
             try:
-                results = list(
-                    DDGS().text(
-                        search_query,
-                        max_results=4
-                    )
-                )
-
+                results = list(DDGS().text(search_query, max_results=4))
                 if results:
-                    context = "\n".join([
-                        f"Title: {r.get('title', '')}\n"
-                        f"Snippet: {r.get('body', '')}"
-                        for r in results
-                    ])
+                    context = "\n".join([f"Snippet: {r['body']}" for r in results])
+                    res = groq_client.chat.completions.create(model=get_secret("GROQ_MODEL", "openai/gpt-oss-120b"), messages=[{"role": "system", "content": f"Answer based on these search results:\n{context}"}, {"role": "user", "content": search_query}])
+                    st.markdown(res.choices[0].message.content)
+            except Exception as e: st.error(f"Error: {e}")
 
-                    res = groq_client.chat.completions.create(
-                        model="openai/gpt-oss-120b",
-                        messages=[
-                            {
-                                "role": "system",
-                                "content": (
-                                    "Answer based on these search results:\n"
-                                    f"{context}"
-                                )
-                            },
-                            {
-                                "role": "user",
-                                "content": search_query
-                            }
-                        ]
-                    )
-
-                    st.markdown(
-                        res.choices[0].message.content
-                    )
-                else:
-                    st.info("No search results found.")
-
-            except Exception as e:
-                st.error(f"Web search error: {e}")
-
-
-# ================= 17. DEEP RESEARCH =================
 elif selected_category == "🔍 Deep Research":
-
     st.markdown("### 🔍 Agentic Deep Research")
-
-    research_prompt = st.text_input(
-        "What should I research?"
-    )
-
-    if (
-        st.button("Start Research", type="primary")
-        and research_prompt
-    ):
-        with st.spinner(
-            "Browsing the web and generating report..."
-        ):
+    research_prompt = st.text_input("What should I research?")
+    if st.button("Start Research", type="primary") and research_prompt:
+        with st.spinner("Browsing live internet and generating report..."):
             try:
-                query_gen = groq_client.chat.completions.create(
-                    model="openai/gpt-oss-120b",
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": (
-                                "Generate 3 search queries based on "
-                                "this topic. Output ONLY the queries "
-                                "separated by newlines."
-                            )
-                        },
-                        {
-                            "role": "user",
-                            "content": research_prompt
-                        }
-                    ]
-                )
-
-                queries = (
-                    query_gen.choices[0].message.content
-                    .strip()
-                    .split("\n")
-                )
-
+                query_gen = groq_client.chat.completions.create(model=get_secret("GROQ_MODEL", "openai/gpt-oss-120b"), messages=[{"role": "system", "content": "Generate 3 search queries based on this topic. Output ONLY the queries separated by newlines."}, {"role": "user", "content": research_prompt}])
+                queries = query_gen.choices[0].message.content.strip().split('\n')
                 all_results = []
+                for q in queries:
+                    if q.strip():
+                        res = list(DDGS().text(q, max_results=3))
+                        all_results.extend(res)
+                context = "\n".join([f"Title: {r['title']}\nSnippet: {r['body']}" for r in all_results])
+                final_report = groq_client.chat.completions.create(model=get_secret("GROQ_MODEL", "openai/gpt-oss-120b"), messages=[{"role": "system", "content": "Synthesize into a highly detailed report with headings."}, {"role": "user", "content": f"Topic: {research_prompt}\n\nResults:\n{context}"}], temperature=0.5, max_tokens=2000)
+                st.markdown(final_report.choices[0].message.content)
+            except Exception as e: st.error(f"Error: {e}")
 
-                for query in queries:
-                    if query.strip():
-                        results = list(
-                            DDGS().text(
-                                query.strip(),
-                                max_results=3
-                            )
-                        )
-                        all_results.extend(results)
-
-                context = "\n".join([
-                    f"Title: {r.get('title', '')}\n"
-                    f"Snippet: {r.get('body', '')}"
-                    for r in all_results
-                ])
-
-                if not context:
-                    st.warning("No research results were found.")
-                else:
-                    final_report = groq_client.chat.completions.create(
-                        model="openai/gpt-oss-120b",
-                        messages=[
-                            {
-                                "role": "system",
-                                "content": (
-                                    "Create a detailed research report "
-                                    "with headings based on the supplied "
-                                    "search results. Mention limitations "
-                                    "when the sources are insufficient."
-                                )
-                            },
-                            {
-                                "role": "user",
-                                "content": (
-                                    f"Topic: {research_prompt}\n\n"
-                                    f"Results:\n{context}"
-                                )
-                            }
-                        ],
-                        temperature=0.5,
-                        max_tokens=2000
-                    )
-
-                    st.markdown(
-                        final_report.choices[0].message.content
-                    )
-
-            except Exception as e:
-                st.error(f"Research error: {e}")
-
-
-# ================= 18. TRANSLATOR =================
 elif selected_category == "🌍 Translator":
-
     st.markdown("### 🌍 Language Translator")
-
     col1, col2 = st.columns(2)
-
-    with col1:
-        src_lang = st.selectbox(
-            "From",
-            [
-                "Auto-Detect",
-                "Bengali",
-                "English",
-                "Hindi",
-                "Arabic"
-            ]
-        )
-
-    with col2:
-        tgt_lang = st.selectbox(
-            "To",
-            [
-                "English",
-                "Bengali",
-                "Hindi",
-                "Arabic",
-                "Spanish"
-            ]
-        )
-
-    text_to_translate = st.text_area(
-        "Enter text to translate:"
-    )
-
-    if (
-        st.button("Translate", type="primary")
-        and text_to_translate
-    ):
+    with col1: src_lang = st.selectbox("From", ["Auto-Detect", "Bengali", "English", "Hindi", "Arabic"])
+    with col2: tgt_lang = st.selectbox("To", ["English", "Bengali", "Hindi", "Arabic", "Spanish"])
+    text_to_translate = st.text_area("Enter text to translate:")
+    if st.button("Translate", type="primary") and text_to_translate:
         with st.spinner("Translating..."):
-            try:
-                prompt = (
-                    f"Translate the following text from {src_lang} "
-                    f"to {tgt_lang}. Only output the translation:\n\n"
-                    f"{text_to_translate}"
-                )
+            prompt = f"Translate the following text from {src_lang} to {tgt_lang}. Only output the translation: \n\n{text_to_translate}"
+            res = groq_client.chat.completions.create(model=get_secret("GROQ_MODEL", "openai/gpt-oss-120b"), messages=[{"role": "user", "content": prompt}])
+            st.success(res.choices[0].message.content)
 
-                res = groq_client.chat.completions.create(
-                    model="openai/gpt-oss-120b",
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": prompt
-                        }
-                    ]
-                )
-
-                st.success(
-                    res.choices[0].message.content
-                )
-
-            except Exception as e:
-                st.error(f"Translation error: {e}")
-
-
-# ================= 19. URL READER =================
 elif selected_category == "🔗 URL Reader":
-
     st.markdown("### 🔗 URL Reader")
-
-    url_input = st.text_input(
-        "Paste a website link here:"
-    )
-
-    url_query = st.text_input(
-        "What do you want to know about this page?"
-    )
-
+    url_input = st.text_input("Paste a website link here:")
+    url_query = st.text_input("What do you want to know about this page?")
     if st.button("Read URL", type="primary") and url_input:
         with st.spinner("Reading webpage..."):
             try:
-                parsed_url = requests.utils.urlparse(url_input)
-
-                if parsed_url.scheme not in ("http", "https"):
-                    st.error("Please enter a valid HTTP or HTTPS URL.")
-                    st.stop()
-
-                headers = {
-                    "User-Agent": "Mozilla/5.0"
-                }
-
-                page = requests.get(
-                    url_input,
-                    headers=headers,
-                    timeout=10
-                )
-
+                parsed = urlparse(url_input.strip())
+                if parsed.scheme not in ("http", "https") or not parsed.hostname:
+                    raise ValueError("Please enter a valid http:// or https:// URL.")
+                host = parsed.hostname.lower()
+                if host in {"localhost", "127.0.0.1", "0.0.0.0", "::1"} or host.endswith((".local", ".internal")):
+                    raise ValueError("Local or internal URLs are not allowed.")
+                headers = {'User-Agent': 'Mozilla/5.0'}
+                page = requests.get(url_input, headers=headers, timeout=10, allow_redirects=False)
                 page.raise_for_status()
+                soup = BeautifulSoup(page.content, 'html.parser')
+                text = soup.get_text(separator=' ', strip=True)[:5000]
+                prompt = f"Based on the following website content, answer this: {url_query if url_query else 'Summarize this page'}\n\nContent:\n{text}"
+                res = groq_client.chat.completions.create(model=get_secret("GROQ_MODEL", "openai/gpt-oss-120b"), messages=[{"role": "user", "content": prompt}])
+                st.markdown(res.choices[0].message.content)
+            except Exception as e: st.error(f"Failed to read URL: {e}")
 
-                soup = BeautifulSoup(
-                    page.content,
-                    "html.parser"
-                )
-
-                page_text = soup.get_text(
-                    separator=" ",
-                    strip=True
-                )[:5000]
-
-                prompt = (
-                    "Based on the following website content, answer this: "
-                    f"{url_query if url_query else 'Summarize this page'}"
-                    f"\n\nContent:\n{page_text}"
-                )
-
-                res = groq_client.chat.completions.create(
-                    model="openai/gpt-oss-120b",
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": prompt
-                        }
-                    ]
-                )
-
-                st.markdown(
-                    res.choices[0].message.content
-                )
-
-            except Exception as e:
-                st.error(f"Failed to read URL: {e}")
-
-
-# ================= 20. MAIN CHAT INTERFACE =================
 else:
-
-    for message in current_messages:
-        avatar = (
-            "logo.png"
-            if message["role"] == "assistant"
-            else "👤"
-        )
-
-        with st.chat_message(
-            message["role"],
-            avatar=avatar
-        ):
-            st.markdown(message["content"])
+    # চ্যাট ইন্টারফেস
+    for m in current_messages:
+        avatar_ai = "logo.png" if "logo.png" else "✨"
+        avatar = avatar_ai if m["role"] == "assistant" else "👤"
+        with st.chat_message(m["role"], avatar=avatar):
+            st.markdown(m["content"])
 
     with st.expander("🎤 Record Voice / Upload Image"):
-
         audio_value = st.audio_input("Speak now")
-
-        uploaded_image = st.file_uploader(
-            "Upload Image",
-            type=["png", "jpg", "jpeg"]
-        )
+        uploaded_image = st.file_uploader("Upload Image", type=["png", "jpg", "jpeg"])
 
     if prompt := st.chat_input("Ask ASIKERA anything..."):
-
         user_text = prompt
-
-        # Voice transcription
         if audio_value:
             with st.spinner("Transcribing..."):
-                try:
-                    audio_bytes = audio_value.getvalue()
-
-                    transcription = (
-                        groq_client.audio.transcriptions.create(
-                            file=("recording.wav", audio_bytes),
-                            model="whisper-large-v3"
-                        )
-                    )
-
-                    user_text = transcription.text
-
-                except Exception as e:
-                    st.error(f"Transcription error: {e}")
-                    st.stop()
-
-        current_messages.append({
-            "role": "user",
-            "content": user_text
-        })
-
+                with open("temp.wav", "wb") as f: f.write(audio_value.getbuffer())
+                with open("temp.wav", "rb") as f:
+                    user_text = groq_client.audio.transcriptions.create(file=("temp.wav", f.read()), model="whisper-large-v3").text
+        
+        current_messages.append({"role":"user","content":user_text})
         with st.chat_message("user", avatar="👤"):
             st.markdown(user_text)
-
-        reply = ""
-
-        with st.chat_message(
-            "assistant",
-            avatar="logo.png"
-        ):
+            
+        with st.chat_message("assistant", avatar="logo.png" if "logo.png" else "✨"):
             with st.spinner("Thinking..."):
-                try:
-
-                    # Image understanding
-                    if uploaded_image:
-                        gemini_model = genai.GenerativeModel(
-                            "gemini-1.5-flash"
-                        )
-
-                        response = gemini_model.generate_content([
-                            user_text,
-                            {
-                                "mime_type": uploaded_image.type,
-                                "data": uploaded_image.getvalue()
-                            }
-                        ])
-
-                        reply = response.text
-                        st.markdown(reply)
-
-                    # Normal AI chat
+                if uploaded_image:
+                    if not GEMINI_API_KEY:
+                        reply = "Gemini API key is not configured. Add GEMINI_API_KEY to Streamlit Secrets."
+                        st.error(reply)
                     else:
-                        system_msg = {
-                            "role": "system",
-                            "content": persona_prompt
-                        }
-
+                        gemini_model = genai.GenerativeModel(get_secret("GEMINI_MODEL", "gemini-2.5-flash"))
+                        response = gemini_model.generate_content([user_text, {"mime_type": uploaded_image.type, "data": uploaded_image.getvalue()}])
+                        reply = response.text or "I couldn't read a response from Gemini. Please try again."
+                        st.markdown(reply)
+                elif chat_provider == "Gemini":
+                    if not GEMINI_API_KEY:
+                        reply = "Gemini API key is not configured. Add GEMINI_API_KEY to Streamlit Secrets."
+                        st.error(reply)
+                    else:
+                        history_text = "\n\n".join(f"{m['role'].upper()}: {m['content']}" for m in current_messages[-10:])
+                        gemini_model = genai.GenerativeModel(get_secret("GEMINI_MODEL", "gemini-2.5-flash"), system_instruction=persona_prompt)
+                        response = gemini_model.generate_content(history_text + "\n\nASSISTANT:")
+                        reply = response.text or "I couldn't read a response from Gemini. Please try again."
+                        st.markdown(reply)
+                else:
+                    if not groq_client:
+                        reply = "Groq API key is not configured. Add GROQ_API_KEY to Streamlit Secrets or select Gemini."
+                        st.error(reply)
+                    else:
+                        system_msg = {"role": "system", "content": persona_prompt}
                         stream = groq_client.chat.completions.create(
-                            model="openai/gpt-oss-120b",
-                            messages=(
-                                [system_msg] + current_messages[-10:]
-                            ),
-                            temperature=0.7,
-                            max_tokens=1500,
-                            stream=True
+                            model=get_secret("GROQ_MODEL", "openai/gpt-oss-120b"),
+                            messages=[system_msg] + current_messages[-10:],
+                            temperature=0.7, max_tokens=1500, stream=True
                         )
-
-                        reply = st.write_stream(
-                            chunk.choices[0].delta.content
-                            for chunk in stream
-                            if chunk.choices[0].delta.content
-                        )
-
-                except Exception as e:
-                    st.error(f"AI response error: {e}")
-
-        # Save successful replies only
-        if reply:
-            current_messages.append({
-                "role": "assistant",
-                "content": reply
-            })
-
-            save_chat(
-                st.session_state.user_email,
-                st.session_state.current_session,
-                current_messages
-            )
-
-            # Generate voice response
-            audio_data = generate_audio_edge(
-                reply,
-                voice_gender
-            )
-
-            if audio_data:
-                st.audio(
-                    audio_data,
-                    format="audio/mp3",
-                    autoplay=True
-                )
+                        reply = st.write_stream(chunk.choices[0].delta.content for chunk in stream if chunk.choices[0].delta.content)
+                
+            current_messages.append({"role":"assistant","content":reply})
+            save_chat(st.session_state.user_email, st.session_state.current_session, current_messages)
+            
+            audio_data = generate_audio_edge(reply, voice_gender)
+            if audio_data: st.audio(audio_data, format="audio/mp3", autoplay=True)
