@@ -16,7 +16,7 @@ from supabase import create_client, Client
 # ================= ১. পেজ কনফিগারেশন =================
 st.set_page_config(page_title="Super AI Pro", page_icon="✨", layout="wide", initial_sidebar_state="expanded")
 
-# ================= ২. আল্ট্রা-প্রিমিয়াম CSS =================
+# ================= ২. আল্ট্রা-প্রিমিয়াম CSS (সার্চ বক্স ফিক্সসহ) =================
 custom_css = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
@@ -27,6 +27,15 @@ custom_css = """
     background: #15151A; 
     border-right: 1px solid #2A2A35; 
     padding-top: 10px;
+}
+
+/* সাইডবার সার্চ বক্সের লেখা দৃশ্যমান করার জন্য */
+[data-testid="stSidebar"] input[type="text"] {
+    color: #E2E8F0 !important;
+    background-color: #1E1E24 !important;
+}
+[data-testid="stSidebar"] input[type="text"]::placeholder {
+    color: #888888 !important;
 }
 
 [data-testid="collapsedControl"] {
@@ -202,7 +211,6 @@ with st.sidebar:
     st.markdown("<p style='color:#888; font-size:12px; margin-bottom:5px;'>⚡ Select Mode</p>", unsafe_allow_html=True)
     tool = st.selectbox("Mode", ["Chat", "Image Gen", "File Analyzer", "Web Search"], label_visibility="collapsed")
     
-    # অ্যাডভান্সড সেটিংস এক্সপ্যান্ডার
     with st.expander("⚙️ Advanced Settings"):
         temperature = st.slider("Temperature", 0.0, 1.0, 0.7, 0.1)
         max_tokens = st.slider("Max Tokens", 500, 4000, 1500, 100)
@@ -248,7 +256,6 @@ current_messages = st.session_state.chat_sessions[st.session_state.current_sessi
 
 # --- চ্যাট মোড ---
 if tool == "Chat":
-    # টপ বার অ্যাকশন (রিনেম ও এক্সপোর্ট)
     col_h1, col_h2, col_h3 = st.columns([3, 1, 1])
     with col_h1:
         st.markdown(f"### 💬 Current Chat: `{st.session_state.current_session}`")
@@ -337,7 +344,7 @@ elif tool == "Web Search":
                         model="openai/gpt-oss-120b", 
                         messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": search_query}]
                     )
-                    st.markdown(res.choices.message.content if hasattr(res.choices[0].message, 'content') else res.choices[0].message.content)
+                    st.markdown(res.choices[0].message.content)
                 else:
                     st.warning("No live search results found.")
             except Exception as e:
