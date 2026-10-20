@@ -16,34 +16,42 @@ from supabase import create_client, Client
 # ================= ১. পেজ কনফিগারেশন =================
 st.set_page_config(page_title="ASIKERA AI", page_icon="logo.png", layout="wide", initial_sidebar_state="expanded")
 
-# ================= ২. আল্ট্রা-প্রিমিয়াম ডার্ক থিম CSS (মেইন অ্যাপ) =================
+# ================= ২. আল্ট্রা-প্রিমিয়াম ডার্ক থিম CSS =================
 custom_css_chat = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
+/* গ্লোবাল থিম */
 .stApp { background: #1E1E1E; font-family: 'Inter', sans-serif; color: #E0E0E0; }
 [data-testid="stSidebar"] { background: #191919; border-right: 1px solid #333; width: 260px !important; }
-[data-testid="stHeader"] { display: none !important; }
 #MainMenu {visibility: hidden;} footer {visibility: hidden;} 
 
-/* মোবাইলে সাইডবার ওপেন করার বাটন (>>) দৃশ্যমান করা */
+/* ================= মেনুবার (Sidebar) বাটন ফিক্স ================= */
+/* হেডারকে মুছে না ফেলে ট্রান্সপারেন্ট করা হলো, যাতে মোবাইলের >> বাটন থাকে */
+[data-testid="stHeader"] { 
+    background: transparent !important; 
+    z-index: 99999 !important;
+}
+
+/* মোবাইলে সাইডবার ওপেন করার বাটনকে জোর করে দৃশ্যমান করা */
 [data-testid="collapsedControl"] {
     display: flex !important; 
     visibility: visible !important;
-    color: #FFF !important; 
+    color: #FFFFFF !important; 
     background-color: #333 !important;
     border-radius: 8px !important; 
-    margin: 10px !important;
-    position: absolute; 
-    top: 10px; 
-    left: 10px; 
-    z-index: 99999;
+    position: fixed !important;
+    top: 15px !important; 
+    left: 15px !important; 
+    z-index: 1000000 !important;
 }
 
-.block-container { padding-top: 2rem !important; padding-bottom: 6rem !important; max-width: 850px !important; margin: 0 auto !important; }
+.block-container { padding-top: 3rem !important; padding-bottom: 6rem !important; max-width: 850px !important; margin: 0 auto !important; }
 .stButton>button[kind="primary"] { background: #4D6BFE; border-radius: 8px; height: 35px; font-weight: 500; border: 0; color: white; font-size: 13px; }
 .stButton>button[kind="secondary"] { background: #252525; border: 1px solid #333; border-radius: 8px; color: #AAA; padding: 5px; font-size: 12px; }
 .stButton>button[kind="secondary"]:hover { background: #333; color: white; }
 
+/* চ্যাট ডিজাইন */
 div[data-testid="stChatMessage"] { background-color: transparent; padding: 10px 0; border: none; }
 div[data-testid="stChatMessage"] h1, div[data-testid="stChatMessage"] h2, div[data-testid="stChatMessage"] h3, 
 div[data-testid="stChatMessage"] h4, div[data-testid="stChatMessage"] h5, div[data-testid="stChatMessage"] h6,
@@ -60,11 +68,12 @@ div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"])
 div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) { margin-right: auto; margin-left: 0; width: 100%; }
 div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) .stMarkdown { background: transparent; padding: 10px 0; display: inline-block; }
 
+/* ================= ইনপুট বক্স ফিক্স ================= */
 div[data-testid="stTextInput"] input { background-color: #252525 !important; color: #FFFFFF !important; border: 1px solid #444 !important; border-radius: 8px !important; }
 div[data-testid="stTextInput"] input::placeholder { color: #888 !important; }
-div[data-testid="stChatInput"] { background-color: #252525 !important; border-radius: 8px !important; border: 1px solid #444 !important; }
-div[data-testid="stChatInput"] > div { background-color: #252525 !important; }
-div[data-testid="stChatInput"] textarea { color: #FFFFFF !important; background-color: #252525 !important; font-size: 14px !important; }
+div[data-testid="stChatInput"] { background-color: #1E1E24 !important; border-radius: 8px !important; border: 1px solid #444 !important; }
+div[data-testid="stChatInput"] > div { background-color: #1E1E24 !important; }
+div[data-testid="stChatInput"] textarea { color: #FFFFFF !important; background-color: transparent !important; font-size: 14px !important; }
 div[data-testid="stChatInput"] button { background: #4D6BFE !important; border-radius: 5px !important; }
 div[data-testid="stChatInput"] button svg { fill: white !important; }
 div[data-testid="stSelectbox"] div[data-baseweb="select"] > div { background-color: #252525 !important; color: #FFF !important; border: 1px solid #444 !important; }
@@ -80,60 +89,17 @@ div[data-testid="stSelectbox"] div[data-baseweb="select"] > div { background-col
 </style>
 """
 
-# ================= ৩. লগইন পেজ CSS (ইনপুট বক্স ফিক্সসহ) =================
+# ================= ৩. লগইন পেজ CSS =================
 custom_css_login = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
-.stApp { 
-    background: radial-gradient(circle at 10% 20%, rgba(139, 92, 246, 0.25), transparent 40%), 
-                radial-gradient(circle at 90% 80%, rgba(59, 130, 246, 0.25), transparent 40%), 
-                #09090B !important; 
-    font-family: 'Inter', sans-serif; 
-}
-
-div[data-testid="stForm"] {
-    background: rgba(20, 20, 25, 0.6) !important;
-    backdrop-filter: blur(16px) !important;
-    -webkit-backdrop-filter: blur(16px) !important;
-    border: 1px solid rgba(255, 255, 255, 0.08) !important;
-    border-radius: 16px !important;
-    padding: 35px !important;
-    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5) !important;
-}
-
-/* ইনপুট বক্সের ব্যাকগ্রাউন্ড কালো এবং লেখা সাদা করা হলো */
-div[data-testid="stTextInput"] input {
-    background-color: #1A1A20 !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    border-radius: 8px !important;
-    color: #FFFFFF !important;
-    padding-left: 10px !important;
-}
-div[data-testid="stTextInput"] input:focus {
-    border-color: #8B5CF6 !important;
-    box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2) !important;
-}
-
-/* লগইন বাটন */
-div[data-testid="stFormSubmitButton"] > button {
-    background: linear-gradient(135deg, #8B5CF6, #3B82F6) !important;
-    border: none !important;
-    border-radius: 8px !important;
-    color: white !important;
-    font-weight: 600 !important;
-    padding: 12px 0 !important;
-    box-shadow: 0 4px 20px rgba(139, 92, 246, 0.4) !important;
-    transition: all 0.3s ease !important;
-}
-div[data-testid="stFormSubmitButton"] > button:hover {
-    transform: translateY(-2px) !important;
-    box-shadow: 0 6px 25px rgba(139, 92, 246, 0.6) !important;
-}
-
+.stApp { background: radial-gradient(circle at 10% 20%, rgba(139, 92, 246, 0.25), transparent 40%), radial-gradient(circle at 90% 80%, rgba(59, 130, 246, 0.25), transparent 40%), #09090B !important; font-family: 'Inter', sans-serif; }
+div[data-testid="stForm"] { background: rgba(20, 20, 25, 0.6) !important; backdrop-filter: blur(16px) !important; border: 1px solid rgba(255, 255, 255, 0.08) !important; border-radius: 16px !important; padding: 35px !important; box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5) !important; }
+div[data-testid="stTextInput"] input { background-color: #1A1A20 !important; border: 1px solid rgba(255, 255, 255, 0.1) !important; border-radius: 8px !important; color: #FFFFFF !important; padding-left: 10px !important; }
+div[data-testid="stTextInput"] input:focus { border-color: #8B5CF6 !important; box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2) !important; }
+div[data-testid="stFormSubmitButton"] > button { background: linear-gradient(135deg, #8B5CF6, #3B82F6) !important; border: none !important; border-radius: 8px !important; color: white !important; font-weight: 600 !important; padding: 12px 0 !important; box-shadow: 0 4px 20px rgba(139, 92, 246, 0.4) !important; }
 button[data-baseweb="tab"] { color: #888 !important; font-weight: 500 !important; }
 button[data-baseweb="tab"][aria-selected="true"] { color: #FFF !important; border-bottom-color: #8B5CF6 !important; }
-
 h1, h2, h3, p, label { color: #FFFFFF !important; }
 #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;} 
 </style>
@@ -187,7 +153,7 @@ if not st.session_state.logged_in and "email" in st.query_params:
     st.session_state.user_email = st.query_params["email"]
     st.rerun()
 
-# ================= ৮. লগইন ও সাইনআপ পেজ =================
+# ================= ৮. লগইন পেজ =================
 if not st.session_state.logged_in:
     st.markdown(custom_css_login, unsafe_allow_html=True)
     
@@ -221,8 +187,7 @@ if not st.session_state.logged_in:
                         st.session_state.user_email = l_email
                         st.query_params["email"] = l_email
                         st.rerun()
-                    else: 
-                        st.error("Invalid email or password.")
+                    else: st.error("Invalid email or password.")
         
         with tab2:
             with st.form("signup_form"):
@@ -234,13 +199,10 @@ if not st.session_state.logged_in:
                 
                 submit_signup = st.form_submit_button("Sign Up", use_container_width=True)
                 if submit_signup:
-                    if len(s_pass) < 6:
-                        st.warning("Password must be at least 6 characters.")
+                    if len(s_pass) < 6: st.warning("Password must be at least 6 characters.")
                     else:
-                        if create_user(s_email, s_pass):
-                            st.success("Account created! Please switch to Login tab.")
-                        else:
-                            st.error("Email already registered.")
+                        if create_user(s_email, s_pass): st.success("Account created! Please switch to Login tab.")
+                        else: st.error("Email already registered.")
                             
         st.markdown("""
         <div style='display: flex; justify-content: space-between; align-items: center; margin-top: 40px; font-size: 11px; color: #888;'>
@@ -292,23 +254,26 @@ with st.sidebar:
     
     selected_category = st.selectbox("Select Mode", CATEGORIES, label_visibility="collapsed")
     
+    # === ASIKERA-র নিজস্ব পরিচয় নিশ্চিত করা হলো ===
+    base_identity = "You are ASIKERA, an advanced AI assistant created by Asikul. Do NOT mention OpenAI, Google, or any other company. You are a cloud-born word-smith. "
+    
     if selected_category == "👨‍💻 Coding Assistant":
-        persona_prompt = "You are an expert programmer. Write clean, optimized code. Explain bugs clearly."
+        persona_prompt = base_identity + "You are an expert programmer. Write clean, optimized code. Explain bugs clearly."
     elif selected_category == "📚 Learning & Study":
-        persona_prompt = "You are a patient and brilliant tutor. Explain concepts simply, step-by-step."
+        persona_prompt = base_identity + "You are a patient and brilliant tutor. Explain concepts simply, step-by-step."
     elif selected_category == "✍️ Writing & Editing":
-        persona_prompt = "You are a professional editor and writer. Fix grammar, improve tone, and write compelling content."
+        persona_prompt = base_identity + "You are a professional editor and writer. Fix grammar, improve tone, and write compelling content."
     elif selected_category == "🎓 English Board (Sir English)":
-        persona_prompt = """
-        You are 'Sir English', an elite, highly professional, and strict IELTS Examiner and English Professor. 
+        persona_prompt = base_identity + """
+        You are 'Sir English', an elite, highly professional, and strict IELTS Examiner. 
         1. Point out ANY grammatical mistake immediately.
         2. Provide a 'Correction' section. 3. Provide a 'Detailed Explanation' in Bengali. 4. Provide 'Advanced Vocabulary'.
         5. Grade paragraphs using IELTS band descriptors.
         """
     elif selected_category == "🔍 Deep Research (Agentic)":
-        persona_prompt = "You are a deep research agent. You will analyze the user's prompt, generate search queries, and synthesize a detailed report."
+        persona_prompt = base_identity + "You are a deep research agent. You will analyze the user's prompt, generate search queries, and synthesize a detailed report."
     else:
-        persona_prompt = "You are a smart and helpful AI assistant."
+        persona_prompt = base_identity + "You are a smart and helpful AI assistant."
 
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
     st.markdown('<div class="label-text">Recent</div>', unsafe_allow_html=True)
