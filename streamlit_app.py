@@ -17,7 +17,8 @@ from bs4 import BeautifulSoup
 import datetime
 
 # ================= ১. পেজ কনফিগারেশন ও API ক্লায়েন্ট =================
-st.set_page_config(page_title="ASIKERA AI", page_icon="logo.png", layout="wide", initial_sidebar_state="expanded")
+# initial_sidebar_state="auto" দিলে মোবাইলে মেনু বাটনটা সবসময় দৃশ্যমান থাকে
+st.set_page_config(page_title="ASIKERA AI", page_icon="logo.png", layout="wide", initial_sidebar_state="auto")
 
 groq_client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
@@ -88,22 +89,30 @@ custom_css = f"""
 .stApp {{ background: {bg_color}; font-family: 'Inter', sans-serif; color: {text_color}; }}
 [data-testid="stSidebar"] {{ background: {sidebar_bg}; border-right: 1px solid {border_color}; width: 280px !important; }}
 
-/* ================= হেডার ও টুলবার ফিক্স ================= */
+/* ================= হেডার ফিক্স (শুধু বাড়তি বাটন হাইড, মেনু বাটন থাকবে) ================= */
 #MainMenu {{visibility: hidden;}} 
 footer {{visibility: hidden;}} 
-[data-testid="stHeader"] {{ background: transparent !important; }}
-[data-testid="stToolbar"] {{ display: none !important; }} /* Share, Edit, Fork বাটন হাইড */
+[data-testid="stHeader"] {{ background: transparent !important; z-index: 999999 !important; }}
+[data-testid="stToolbar"] {{ display: none !important; }} /* Share, Fork বাটন হাইড */
 [data-testid="stDecoration"] {{ display: none !important; }}
 
-/* মোবাইলে সাইডবার ওপেন করার বাটন (>>) দৃশ্যমান রাখা */
-[data-testid="collapsedControl"] {{
-    display: flex !important; visibility: visible !important;
-    color: {text_color} !important; background-color: {border_color} !important;
-    border-radius: 8px !important; position: fixed !important;
-    top: 15px !important; left: 15px !important; z-index: 1000000 !important;
+/* ================= মেনুবার ওপেন বাটন (>>) জোর করে দৃশ্যমান করা ================= */
+[data-testid="collapsedControl"], 
+[data-testid="stSidebarCollapsedControl"],
+button[kind="header"] {{
+    display: flex !important; 
+    visibility: visible !important;
+    color: {text_color} !important; 
+    background-color: {border_color} !important;
+    border-radius: 8px !important; 
+    position: fixed !important;
+    top: 15px !important; 
+    left: 15px !important; 
+    z-index: 9999999 !important;
+    opacity: 1 !important;
 }}
 
-.block-container {{ padding-top: 2rem !important; padding-bottom: 6rem !important; max-width: 850px !important; margin: 0 auto !important; }}
+.block-container {{ padding-top: 3rem !important; padding-bottom: 6rem !important; max-width: 850px !important; margin: 0 auto !important; }}
 .stButton>button[kind="primary"] {{ background: #4D6BFE; border-radius: 10px; height: 40px; font-weight: 600; border: 0; color: white; }}
 .stButton>button[kind="secondary"] {{ background: {input_bg}; border: 1px solid {border_color}; border-radius: 10px; color: {text_color}; padding: 5px; font-size: 13px; }}
 
@@ -389,7 +398,7 @@ elif selected_category == "🔗 URL Reader":
             except Exception as e: st.error(f"Failed to read URL: {e}")
 
 else:
-    # চ্যাট ইন্টারফেস (সব টেক্সট ও কাস্টম মোডের জন্য)
+    # চ্যাট ইন্টারফেস
     for m in current_messages:
         avatar_ai = "logo.png" if "logo.png" else "✨"
         avatar = avatar_ai if m["role"] == "assistant" else "👤"
