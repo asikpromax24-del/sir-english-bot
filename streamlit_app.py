@@ -13,40 +13,41 @@ import json
 import hashlib
 from supabase import create_client, Client
 
-# ================= ১. পেজ কনফিগারেশন ও ডার্ক থিম (Gemini স্টাইল) =================
-st.set_page_config(page_title="Super AI - Gemini Style", page_icon="✨", layout="wide", initial_sidebar_state="expanded")
+# ================= ১. পেজ কনফিগারেশন ও UI (Meta/Gemini স্টাইল) =================
+st.set_page_config(page_title="Super AI - Ultimate", page_icon="✨", layout="wide", initial_sidebar_state="expanded")
 
 custom_css = """
 <style>
-    /* সাইডবার ডিজাইন */
-    [data-testid="stSidebar"] { background-color: #131314; border-right: 1px solid #333; }
-    [data-testid="stSidebar"] p, [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 { color: #E3E3E3 !important; }
-    
-    /* মেইন ব্যাকগ্রাউন্ড */
+    /* গ্লোবাল থিম */
     .stApp { background-color: #131314; color: #E3E3E3 !important; }
-    .block-container { padding-top: 1rem !important; padding-bottom: 5rem !important; max-width: 900px !important; }
     
-    /* বাটন ডিজাইন (Gemini স্টাইল রাউন্ডেড) */
-    .stButton > button { 
-        color: #E3E3E3 !important; background-color: #1E1F20 !important; 
-        border: none !important; border-radius: 20px !important; 
-        text-align: left !important; padding: 10px 15px !important;
-        transition: background-color 0.2s;
-    }
-    .stButton > button:hover { background-color: #333537 !important; }
+    /* সাইডবার ডিজাইন */
+    [data-testid="stSidebar"] { background-color: #1E1F20; border-right: 1px solid #333; }
+    [data-testid="stSidebar"] p, [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 { color: #E3E3E3 !important; }
+    section[data-testid="stSidebar"] .stButton > button { border-radius: 20px; text-align: left; }
     
-    /* চ্যাট ইনপুট বক্স (Gemini স্টাইল) */
+    /* মেইন এরিয়া */
+    .block-container { padding-top: 2rem !important; max-width: 900px !important; }
+    
+    /* চ্যাট মেসেজ ডিজাইন */
+    div[data-testid="stChatMessage"] { background-color: transparent; padding: 10px 0; border-bottom: 1px solid #333; }
+    div[data-testid="stChatMessage"] p { color: #E3E3E3 !important; font-size: 16px; line-height: 1.6; }
+    
+    /* চ্যাট ইনপুট বক্স (Meta AI স্টাইল) */
     div[data-testid="stChatInput"] { background-color: #1E1F20 !important; border-radius: 30px !important; border: 1px solid #444; }
     div[data-testid="stChatInput"] textarea { color: #E3E3E3 !important; }
     
-    /* চ্যাট মেসেজ ডিজাইন */
-    div[data-testid="stChatMessage"] { background-color: transparent; padding: 10px 0; }
-    div[data-testid="stChatMessage"] p { color: #E3E3E3 !important; font-size: 16px; line-height: 1.6; }
+    /* কুইক প্রম্পট বাটন (Meta/Gemini স্টাইল) */
+    .stButton > button { 
+        color: #E3E3E3 !important; background-color: #2B2D31 !important; 
+        border: none !important; border-radius: 15px !important; 
+        padding: 15px 20px !important; text-align: left !important;
+        transition: all 0.3s;
+    }
+    .stButton > button:hover { background-color: #3F4147 !important; }
     
-    /* ইনপুট ফিল্ড */
+    /* ইনপুট বক্স */
     div[data-testid="stTextInput"] input { color: #E3E3E3 !important; background-color: #1E1F20 !important; border-radius: 10px; border: 1px solid #444; }
-    
-    /* হাইড ডিফল্ট এলিমেন্ট */
     #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
 </style>
 """
@@ -59,24 +60,17 @@ supabase: Client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABAS
 
 # ================= ৩. ডেটাবেস ফাংশন =================
 def make_hashes(password): return hashlib.sha256(str.encode(password)).hexdigest()
-
 def create_user(email, password):
-    try:
-        supabase.table("users").insert({"email": email, "password": make_hashes(password)}).execute()
-        return True
+    try: supabase.table("users").insert({"email": email, "password": make_hashes(password)}).execute(); return True
     except: return False
-
 def login_user(email, password):
     response = supabase.table("users").select("password").eq("email", email).execute()
-    if response.data and response.data[0]["password"] == make_hashes(password): return True
-    return False
-
+    return bool(response.data and response.data[0]["password"] == make_hashes(password))
 def save_chat(email, session_name, messages):
     try:
         supabase.table("chats").delete().eq("user_email", email).eq("session_name", session_name).execute()
         supabase.table("chats").insert({"user_email": email, "session_name": session_name, "messages": messages}).execute()
-    except Exception as e: print(f"Save Error: {e}")
-
+    except: pass
 def load_chats(email):
     response = supabase.table("chats").select("session_name, messages").eq("user_email", email).execute()
     sessions = {row["session_name"]: row["messages"] for row in response.data}
@@ -86,8 +80,7 @@ def load_chats(email):
 def generate_audio_edge(text, speed="+0%"):
     try:
         lang = detect(text)
-        voice_map = {'bn': 'bn-BD-NabanitaNeural', 'en': 'en-US-AriaNeural'}
-        voice = voice_map.get(lang, 'en-US-AriaNeural')
+        voice = 'bn-BD-NabanitaNeural' if lang == 'bn' else 'en-US-AriaNeural'
     except: voice = 'en-US-AriaNeural'
     async def _generate():
         communicate = edge_tts.Communicate(text, voice, rate=speed)
@@ -96,26 +89,19 @@ def generate_audio_edge(text, speed="+0%"):
             if chunk["type"] == "audio": audio_data += chunk["data"]
         return audio_data
     try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        loop = asyncio.new_event_loop(); asyncio.set_event_loop(loop)
         return io.BytesIO(loop.run_until_complete(_generate()))
     except: return None
 
 def stream_groq_response(chat_history, persona_prompt):
-    system_msg = {
-        "role": "system", 
-        "content": persona_prompt + "\n\nIMPORTANT: You are a highly intelligent, witty, and friendly AI. Do NOT sound like a robot. Use humor, emojis, and engaging language. Answer in the user's language."
-    }
-    full_history = [system_msg] + chat_history
-    stream = groq_client.chat.completions.create(model="openai/gpt-oss-120b", messages=full_history, temperature=0.8, max_tokens=1500, stream=True)
+    system_msg = {"role": "system", "content": persona_prompt}
+    stream = groq_client.chat.completions.create(model="openai/gpt-oss-120b", messages=[system_msg] + chat_history, temperature=0.7, max_tokens=1500, stream=True)
     for chunk in stream:
-        if chunk.choices[0].delta.content:
-            yield chunk.choices[0].delta.content
+        if chunk.choices[0].delta.content: yield chunk.choices[0].delta.content
 
 # ================= ৫. অটো-লগইন সিস্টেম =================
 if "logged_in" not in st.session_state: st.session_state.logged_in = False
 if "user_email" not in st.session_state: st.session_state.user_email = ""
-
 if not st.session_state.logged_in and "email" in st.query_params:
     st.session_state.logged_in = True
     st.session_state.user_email = st.query_params["email"]
@@ -123,72 +109,68 @@ if not st.session_state.logged_in and "email" in st.query_params:
 
 # ================= ৬. লগইন পেজ =================
 if not st.session_state.logged_in:
-    st.title("✨ Welcome to Gemini Style AI")
+    st.title("✨ Welcome to Ultimate AI")
     tab1, tab2 = st.tabs(["Login", "Sign Up"])
     with tab1:
-        login_email = st.text_input("Email", key="l_email")
-        login_pass = st.text_input("Password", type="password", key="l_pass")
+        l_email = st.text_input("Email", key="l_email")
+        l_pass = st.text_input("Password", type="password", key="l_pass")
         if st.button("Login", use_container_width=True):
-            if login_user(login_email, login_pass):
-                st.session_state.logged_in = True
-                st.session_state.user_email = login_email
-                st.query_params["email"] = login_email
-                st.rerun()
+            if login_user(l_email, l_pass):
+                st.session_state.logged_in = True; st.session_state.user_email = l_email
+                st.query_params["email"] = l_email; st.rerun()
             else: st.error("Invalid credentials")
     with tab2:
-        new_email = st.text_input("Email", key="s_email")
-        new_pass = st.text_input("Password", type="password", key="s_pass")
+        s_email = st.text_input("Email", key="s_email")
+        s_pass = st.text_input("Password", type="password", key="s_pass")
         if st.button("Sign Up", use_container_width=True):
-            if create_user(new_email, new_pass): st.success("Account created! Please login.")
+            if create_user(s_email, s_pass): st.success("Account created! Please login.")
             else: st.error("Email already exists.")
     st.stop()
 
-# ================= ৭. সাইডবার (Gemini স্টাইল মেনু) =================
+# ================= ৭. সাইডবার (Gemini/Meta স্টাইল মেনু) =================
 with st.sidebar:
     st.markdown("### ✨ Super AI")
-    
-    # New Chat Button
-    if st.button("✏️ New chat", use_container_width=True):
-        new_chat_id = f"Chat {len(st.session_state.chat_sessions) + 1}"
-        st.session_state.chat_sessions[new_chat_id] = []
-        st.session_state.current_session = new_chat_id
+    if st.button("✏️ New Chat", use_container_width=True):
+        new_id = f"Chat {len(st.session_state.chat_sessions) + 1}"
+        st.session_state.chat_sessions[new_id] = []
+        st.session_state.current_session = new_id
         st.rerun()
-
-    # Chat Search
+    
     search_query = st.text_input("🔍 Search chats", placeholder="Type to search...")
-    
     st.markdown("---")
     
-    # Modes
-    app_mode = st.radio("Select Mode", ["💬 Chat", "🎓 Student (Teacher)", "🎨 Images", "📊 Data"])
+    # ৪টি পার্সোনালিটি
+    st.markdown("#### 🎭 AI Personalities")
+    persona_choice = st.radio("Choose AI Version", [
+        "🌟 Gemini (Smart & Fast)",
+        "💬 Meta (Friendly & Witty)",
+        "🧠 ChatGPT (Professional)",
+        "🎓 Sir English (Strict Teacher)",
+        "⚙️ Custom Persona"
+    ])
     
-    st.markdown("---")
-    st.markdown("### ⚙️ Customize")
-    
-    # Personas
-    persona_choice = st.selectbox("AI Persona", ["Witty Assistant", "Strict Teacher", "Python Coder", "Custom"])
-    if persona_choice == "Custom":
-        persona_prompt = st.text_area("Enter custom instructions:")
-    elif persona_choice == "Strict Teacher":
-        persona_prompt = "You are 'Sir English', a strict English teacher. Correct grammar and explain in Bengali."
-    elif persona_choice == "Python Coder":
-        persona_prompt = "You are a senior Python developer. Write clean code."
+    if persona_choice == "⚙️ Custom Persona":
+        persona_prompt = st.text_area("Custom Instructions:", "You are a helpful AI.")
+    elif persona_choice == "🎓 Sir English (Strict Teacher)":
+        persona_prompt = "You are 'Sir English', a highly professional, strict English teacher. Correct grammar, explain in Bengali, be encouraging but strict."
+    elif persona_choice == "💬 Meta (Friendly & Witty)":
+        persona_prompt = "You are Meta AI. Be friendly, slightly humorous, and use emojis. Keep answers concise and fun."
+    elif persona_choice == "🧠 ChatGPT (Professional)":
+        persona_prompt = "You are a professional, highly intelligent AI assistant like ChatGPT. Provide detailed, structured, and accurate answers."
     else:
-        persona_prompt = "You are a witty, smart, and helpful AI assistant."
+        persona_prompt = "You are Gemini, an incredibly smart and fast AI. Answer clearly and efficiently."
 
-    # Temporary Chat Toggle
-    is_temp_chat = st.checkbox("🕵️ Temporary Chat (Not Saved)")
+    st.markdown("---")
+    st.markdown("#### 🛠️ Tools")
+    tool = st.selectbox("Choose Tool", ["💬 Chat", "🎨 Image Gen", "📊 Data Viz"])
     
     st.markdown("---")
-    st.markdown("### 💬 Recent")
+    st.markdown("#### 💬 Recent")
     
-    # Chat History List (Filtered by search)
     if "chat_sessions" not in st.session_state:
         st.session_state.chat_sessions = load_chats(st.session_state.user_email)
     
-    session_list = list(st.session_state.chat_sessions.keys())
-    filtered_sessions = [s for s in session_list if search_query.lower() in s.lower()]
-    
+    filtered_sessions = [s for s in st.session_state.chat_sessions.keys() if search_query.lower() in s.lower()]
     for s in filtered_sessions:
         if st.button(f"💬 {s}", use_container_width=True):
             st.session_state.current_session = s
@@ -196,73 +178,66 @@ with st.sidebar:
 
     st.markdown("---")
     if st.button("🚪 Logout", use_container_width=True):
-        st.session_state.logged_in = False
-        st.query_params.clear()
-        st.rerun()
+        st.session_state.logged_in = False; st.query_params.clear(); st.rerun()
 
 # ================= ৮. মেইন অ্যাপ লজিক =================
 if "current_session" not in st.session_state:
     st.session_state.current_session = list(st.session_state.chat_sessions.keys())[0]
-
 current_messages = st.session_state.chat_sessions[st.session_state.current_session]
 
-# --- মোড: Chat / Teacher ---
-if app_mode in ["💬 Chat", "🎓 Student (Teacher)"]:
-    st.title(f"{app_mode} with AI")
-    
+# --- টুল: চ্যাট ---
+if tool == "💬 Chat":
+    # মেসেজ রেন্ডার
     for message in current_messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    with st.expander("📁 Upload File / 🎤 Voice"):
-        uploaded_file = st.file_uploader("Upload", type=["pdf", "png", "jpg"])
-        audio_value = st.audio_input("Record voice")
+    # যদি চ্যাট খালি থাকে, কুইক প্রম্পট দেখাবে (Meta/Gemini স্টাইল)
+    if len(current_messages) == 0:
+        st.markdown("<h3 style='text-align: center; margin-top: 50px;'>What are you thinking today?</h3>", unsafe_allow_html=True)
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            if st.button("🎨 Create an image"):
+                st.session_state.quick_prompt = "Generate an image of a futuristic city"
+                st.rerun()
+        with col2:
+            if st.button("📰 Today's headlines"):
+                st.session_state.quick_prompt = "What are the top tech news today?"
+                st.rerun()
+        with col3:
+            if st.button("📚 Explain Pythagoras"):
+                st.session_state.quick_prompt = "Explain the Pythagorean theorem simply."
+                st.rerun()
 
-    prompt = st.chat_input("Ask Gemini-style AI anything...")
+    # চ্যাট ইনপুট
+    prompt = st.chat_input("Ask anything...")
+    if "quick_prompt" in st.session_state and st.session_state.quick_prompt:
+        prompt = st.session_state.quick_prompt
+        st.session_state.quick_prompt = None
 
-    if prompt or audio_value:
-        if not prompt and audio_value:
-            with st.spinner("Transcribing..."):
-                with open("temp.wav", "wb") as f: f.write(audio_value.getbuffer())
-                with open("temp.wav", "rb") as f:
-                    prompt = groq_client.audio.transcriptions.create(file=("temp.wav", f.read()), model="whisper-large-v3").text
-
+    if prompt:
         current_messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"): st.markdown(prompt)
 
         with st.chat_message("assistant"):
-            if uploaded_file:
-                with st.spinner("Analyzing..."):
-                    gemini_model = genai.GenerativeModel('gemini-1.5-flash')
-                    response = gemini_model.generate_content([prompt, {"mime_type": uploaded_file.type, "data": uploaded_file.getvalue()}])
-                    answer = response.text
-                    st.markdown(answer)
-            else:
+            with st.spinner("Thinking..."):
                 answer = st.write_stream(stream_groq_response(current_messages[-10:], persona_prompt))
-            
             current_messages.append({"role": "assistant", "content": answer})
-            
-            # সেভ লজিক (Temporary chat হলে সেভ হবে না)
-            if not is_temp_chat:
-                save_chat(st.session_state.user_email, st.session_state.current_session, current_messages)
-            
-            # অডিও আউটপুট
-            audio_data = generate_audio_edge(answer)
-            if audio_data: st.audio(audio_data, format="audio/mp3", autoplay=True)
+            save_chat(st.session_state.user_email, st.session_state.current_session, current_messages)
 
-# --- মোড: Images ---
-elif app_mode == "🎨 Images":
-    st.title("🎨 Image Generator")
+# --- টুল: ইমেজ জেনারেটর ---
+elif tool == "🎨 Image Gen":
+    st.title("🎨 AI Image Generator")
     img_prompt = st.text_input("Describe your image:")
-    if st.button("Generate"):
+    if st.button("Generate Image"):
         if img_prompt:
             with st.spinner("Painting..."):
                 safe_prompt = urllib.parse.quote(img_prompt)
                 image_url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width=1024&height=1024&nologo=true"
                 st.image(image_url, use_container_width=True)
 
-# --- মোড: Data ---
-elif app_mode == "📊 Data":
+# --- টুল: ডেটা ভিজুয়ালাইজার ---
+elif tool == "📊 Data Viz":
     st.title("📊 Data Visualization")
     csv_file = st.file_uploader("Upload CSV", type=["csv"])
     if csv_file:
