@@ -13,23 +13,44 @@ import pandas as pd
 import plotly.express as px
 from supabase import create_client, Client
 
-# ================= ১. পেজ কনফিগারেশন ও UI (আপনার দেওয়া ডিজাইন) =================
+# ================= ১. পেজ কনফিগারেশন ও UI (Meta/Gemini স্টাইল) =================
 st.set_page_config(page_title="Super AI Pro", page_icon="✨", layout="wide", initial_sidebar_state="expanded")
 
-# আপনার দেওয়া CSS + চ্যাট ইন্টারফেসের জন্য কিছু বাড়তি ফিক্স
 custom_css = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
+
+/* গ্লোবাল ডার্ক থিম */
 .stApp { background: #0F0F0F; font-family: 'Inter', sans-serif; color: #E0E0E0; }
+
+/* সাইডবার ডিজাইন */
 [data-testid="stSidebar"] { background: #151515; border-right: 1px solid #262626; }
+
+/* সাইডবার ওপেন বাটন (মোবাইলে >> আইকন দৃশ্যমান করা) */
+[data-testid="collapsedControl"] {
+    display: flex !important; visibility: visible !important;
+    color: #E0E0E0 !important; background-color: #2B2D31 !important;
+    border-radius: 5px !important; margin: 10px !important;
+}
+[data-testid="collapsedControl"] svg { fill: #E0E0E0 !important; }
+
+/* প্রাইমারি বাটন (New Chat) */
 .stButton>button[kind="primary"] { 
     background: linear-gradient(135deg, #7C3AED, #3B82F6);
-    border-radius: 12px; height: 44px; font-weight: 600; border:0; color: white;
+    border-radius: 12px; height: 44px; font-weight: 600; border:0; color: white; transition: all 0.3s;
 }
+.stButton>button[kind="primary"]:hover { transform: scale(1.02); box-shadow: 0 4px 15px rgba(124, 58, 237, 0.4); }
+
+/* সেকেন্ডারি বাটন */
 .stButton>button[kind="secondary"] {
     background: #1E1E1E; border: 1px solid #333; border-radius: 12px; color: #CCC;
 }
 .stButton>button[kind="secondary"]:hover { border-color: #7C3AED; color: white; }
+
+/* কুইক প্রম্পট বাটন (Meta AI স্টাইল) */
+.stButton > button { 
+    text-align: left; border-radius: 15px; padding: 15px 20px; transition: all 0.3s;
+}
 
 /* চ্যাট মেসেজ ডিজাইন */
 div[data-testid="stChatMessage"] { background-color: transparent; padding: 10px 0; border-bottom: 1px solid #262626; }
@@ -37,15 +58,16 @@ div[data-testid="stChatMessage"] p { color: #E0E0E0 !important; font-size: 16px;
 div[data-testid="stChatMessage"] table { border-collapse: collapse; width: 100%; margin: 10px 0; }
 div[data-testid="stChatMessage"] th, div[data-testid="stChatMessage"] td { color: #E0E0E0 !important; border: 1px solid #444 !important; padding: 8px; }
 
-/* চ্যাট ইনপুট */
-div[data-testid="stChatInput"] { background-color: #1A1A1A !important; border-radius: 15px !important; border: 1px solid #333; }
+/* চ্যাট ইনপুট বক্স */
+div[data-testid="stChatInput"] { background-color: #1A1A1A !important; border-radius: 20px !important; border: 1px solid #444; }
 div[data-testid="stChatInput"] textarea { color: #E0E0E0 !important; }
 div[data-testid="stChatInput"] button { background-color: #2B2D31 !important; border-radius: 10px !important; }
 div[data-testid="stChatInput"] button svg { fill: #FFF !important; }
 
-/* অন্যান্য ইনপুট */
+/* ইনপুট ফিল্ড */
 div[data-testid="stTextInput"] input { color: #E0E0E0 !important; background-color: #1A1A1A !important; border-radius: 10px; border: 1px solid #333; }
-#MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
+
+#MainMenu {visibility: hidden;} footer {visibility: hidden;} header {background-color: transparent !important;}
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
@@ -125,7 +147,7 @@ if not st.session_state.logged_in:
                 else: st.error("Email already exists.")
     st.stop()
 
-# ================= ৭. সাইডবার (আপনার দেওয়া ডিজাইন) =================
+# ================= ৭. সাইডবার =================
 if "chat_sessions" not in st.session_state:
     st.session_state.chat_sessions = load_chats(st.session_state.user_email)
 if "current_session" not in st.session_state:
@@ -134,7 +156,6 @@ if "current_session" not in st.session_state:
 with st.sidebar:
     st.markdown("## ✨ Super AI Pro")
     
-    # New Chat Button (Gradient)
     if st.button("＋ New Chat", use_container_width=True, type="primary"):
         new_id = f"Chat {len(st.session_state.chat_sessions) + 1}"
         st.session_state.chat_sessions[new_id] = []
@@ -147,7 +168,6 @@ with st.sidebar:
     st.markdown("**🎭 AI Personalities**")
     persona_choice = st.radio("persona", ["🚀 Nova", "😎 Vibe", "🧑‍🏫 Pro", "📚 Sir English"], label_visibility="collapsed")
     
-    # প্রম্পট ম্যাপিং
     if persona_choice == "📚 Sir English":
         persona_prompt = "You are 'Sir English', a strict English teacher. Correct grammar, explain in Bengali."
     elif persona_choice == "😎 Vibe":
@@ -178,13 +198,40 @@ with st.sidebar:
 # ================= ৮. মেইন অ্যাপ লজিক =================
 current_messages = st.session_state.chat_sessions[st.session_state.current_session]
 
-# --- টুল ১: চ্যাট ---
+# --- চ্যাট (Quick Prompts সহ) ---
 if tool == "💬 Chat":
+    # যদি চ্যাট খালি থাকে, Meta AI-র মতো কুইক বাটন দেখাবে
+    if len(current_messages) == 0:
+        st.markdown("<h3 style='text-align: center; margin-top: 50px; font-weight:600;'>What are you thinking today?</h3>", unsafe_allow_html=True)
+        st.write("")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            if st.button("🎨 Create an image", use_container_width=True):
+                st.session_state.quick_prompt = "Generate an image of a futuristic city"
+                st.rerun()
+        with col2:
+            if st.button("📰 Today's headlines", use_container_width=True):
+                st.session_state.quick_prompt = "What are the top tech news today?"
+                st.rerun()
+        with col3:
+            if st.button("📚 Explain Pythagoras", use_container_width=True):
+                st.session_state.quick_prompt = "Explain the Pythagorean theorem simply."
+                st.rerun()
+
+    # মেসেজ রেন্ডার
     for m in current_messages:
         with st.chat_message(m["role"]):
             st.markdown(m["content"])
 
-    if prompt := st.chat_input("Ask anything..."):
+    # ইনপুট
+    prompt = st.chat_input("Ask anything...")
+    
+    # কুইক প্রম্পট ক্লিক করলে সেটা ইনপুট হিসেবে যাবে
+    if "quick_prompt" in st.session_state and st.session_state.quick_prompt:
+        prompt = st.session_state.quick_prompt
+        st.session_state.quick_prompt = None
+
+    if prompt:
         current_messages.append({"role":"user","content":prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
@@ -202,13 +249,12 @@ if tool == "💬 Chat":
             current_messages.append({"role":"assistant","content":reply})
             save_chat(st.session_state.user_email, st.session_state.current_session, current_messages)
             
-            # অডিও
             audio_data = generate_audio_edge(reply)
             if audio_data: st.audio(audio_data, format="audio/mp3", autoplay=True)
 
-# --- টুল ২: ইমেজ জেনারেটর ---
+# --- ইমেজ জেনারেটর ---
 elif tool == "🖼️ Image Gen":
-    st.markdown("### 🖼️ Image Generator")
+    st.markdown("### 🖼️ AI Image Generator")
     img_prompt = st.text_input("Describe your image:")
     if st.button("Generate Image", type="primary"):
         if img_prompt:
@@ -217,7 +263,7 @@ elif tool == "🖼️ Image Gen":
                 image_url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width=1024&height=1024&nologo=true"
                 st.image(image_url, use_container_width=True)
 
-# --- টুল ৩: ফাইল এনালাইজার ---
+# --- ফাইল এনালাইজার ---
 elif tool == "📄 File Analyzer":
     st.markdown("### 📄 File Analyzer (PDF/Image)")
     uploaded_file = st.file_uploader("Upload a PDF or Image to analyze", type=["pdf", "png", "jpg", "jpeg"])
@@ -233,7 +279,7 @@ elif tool == "📄 File Analyzer":
             except Exception as e:
                 st.error(f"Error: {str(e)}")
 
-# --- টুল ৪: ওয়েব সার্চ ---
+# --- ওয়েব সার্চ ---
 elif tool == "🌐 Web Search":
     st.markdown("### 🌐 Live Web Search")
     search_query = st.text_input("Search the web:")
