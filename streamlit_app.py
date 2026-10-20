@@ -16,7 +16,7 @@ from supabase import create_client, Client
 # ================= ১. পেজ কনফিগারেশন =================
 st.set_page_config(page_title="ASIKERA AI", page_icon="⚡", layout="wide", initial_sidebar_state="expanded")
 
-# ================= ২. আল্ট্রা-প্রিমিয়াম CSS (DeepSeek স্টাইল ও ইনপুট ফিক্স) =================
+# ================= ২. আল্ট্রা-প্রিমিয়াম CSS (DeepSeek স্টাইল) =================
 custom_css = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
@@ -67,7 +67,14 @@ custom_css = """
 
 /* ================= চ্যাট ডিজাইন ================= */
 div[data-testid="stChatMessage"] { background-color: transparent; padding: 10px 0; border: none; }
-div[data-testid="stChatMessage"] p, div[data-testid="stChatMessage"] li { color: #E0E0E0 !important; font-size: 14px !important; line-height: 1.6; }
+
+/* === এখানে লেখার কালার ফিক্স করা হয়েছে === */
+div[data-testid="stChatMessage"] .stMarkdown * { 
+    color: #E0E0E0 !important; 
+}
+div[data-testid="stChatMessage"] p, div[data-testid="stChatMessage"] li { 
+    color: #E0E0E0 !important; font-size: 14px !important; line-height: 1.6; 
+}
 
 /* ইউজার মেসেজ */
 div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"]) { flex-direction: row-reverse; text-align: right; margin-left: auto; margin-right: 0; width: fit-content; max-width: 90%; }
@@ -77,32 +84,23 @@ div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"])
 div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) { margin-right: auto; margin-left: 0; width: 100%; }
 div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) .stMarkdown { background: transparent; padding: 10px 0; display: inline-block; }
 
-/* টেবিল ফিক্স */
+/* টেবিল ফিক্স (টেবিলের ভেতরের লেখাও সাদা হবে) */
 div[data-testid="stChatMessage"] table { display: block !important; overflow-x: auto !important; border-collapse: collapse !important; margin: 10px 0 !important; }
-div[data-testid="stChatMessage"] th, div[data-testid="stChatMessage"] td { color: #E0E0E0 !important; border: 1px solid #444 !important; padding: 6px 12px !important; font-size: 13px !important; }
+div[data-testid="stChatMessage"] table th, div[data-testid="stChatMessage"] table td { 
+    color: #E0E0E0 !important; border: 1px solid #444 !important; padding: 6px 12px !important; font-size: 13px !important; 
+}
 
-/* ================= ইনপুট বক্স ফিক্স (সবচেয়ে জরুরি) ================= */
+/* ================= ইনপুট বক্স ফিক্স ================= */
 /* সার্চ বক্স (Sidebar) */
 div[data-testid="stTextInput"] input { 
-    background-color: #252525 !important; 
-    color: #FFFFFF !important; 
-    border: 1px solid #444 !important; 
-    border-radius: 8px !important;
+    background-color: #252525 !important; color: #FFFFFF !important; border: 1px solid #444 !important; border-radius: 8px !important;
 }
 div[data-testid="stTextInput"] input::placeholder { color: #888 !important; }
 
 /* নিচের চ্যাট বক্স (Chat Input) */
-div[data-testid="stChatInput"] { 
-    background-color: #252525 !important; 
-    border-radius: 8px !important; 
-    border: 1px solid #444 !important; 
-}
+div[data-testid="stChatInput"] { background-color: #252525 !important; border-radius: 8px !important; border: 1px solid #444 !important; }
 div[data-testid="stChatInput"] > div { background-color: #252525 !important; }
-div[data-testid="stChatInput"] textarea { 
-    color: #FFFFFF !important; 
-    background-color: #252525 !important;
-    font-size: 14px !important; 
-}
+div[data-testid="stChatInput"] textarea { color: #FFFFFF !important; background-color: #252525 !important; font-size: 14px !important; }
 div[data-testid="stChatInput"] textarea::placeholder { color: #888 !important; }
 div[data-testid="stChatInput"] button { background: #4D6BFE !important; border-radius: 5px !important; }
 div[data-testid="stChatInput"] button svg { fill: white !important; }
