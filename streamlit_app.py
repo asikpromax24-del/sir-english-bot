@@ -16,7 +16,7 @@ from supabase import create_client, Client
 # ================= ১. পেজ কনফিগারেশন =================
 st.set_page_config(page_title="ASIKERA AI", page_icon="logo.png", layout="wide", initial_sidebar_state="expanded")
 
-# ================= ২. আল্ট্রা-প্রিমিয়াম ডার্ক থিম CSS (চ্যাটের জন্য) =================
+# ================= ২. আল্ট্রা-প্রিমিয়াম ডার্ক থিম CSS (মেইন অ্যাপ) =================
 custom_css_chat = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
@@ -26,7 +26,6 @@ custom_css_chat = """
 #MainMenu {visibility: hidden;} footer {visibility: hidden;} 
 
 .block-container { padding-top: 1rem !important; padding-bottom: 6rem !important; max-width: 850px !important; margin: 0 auto !important; }
-
 .stButton>button[kind="primary"] { background: #4D6BFE; border-radius: 8px; height: 35px; font-weight: 500; border: 0; color: white; font-size: 13px; }
 .stButton>button[kind="secondary"] { background: #252525; border: 1px solid #333; border-radius: 8px; color: #AAA; padding: 5px; font-size: 12px; }
 .stButton>button[kind="secondary"]:hover { background: #333; color: white; }
@@ -67,16 +66,16 @@ div[data-testid="stSelectbox"] div[data-baseweb="select"] > div { background-col
 </style>
 """
 
-# ================= ৩. আল্ট্রা-প্রিমিয়াম লগইন পেজ CSS (আপনার ১ নম্বর ছবির মতো) =================
+# ================= ৩. আল্ট্রা-প্রিমিয়াম লগইন CSS (আপনার ১ নম্বর ছবির হুবহু ডিজাইন) =================
 custom_css_login = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-/* ১. গ্লোবাল ব্যাকগ্রাউন্ড (গ্লোয়িং গ্রেডিয়েন্ট) */
+/* ১. ব্যাকগ্রাউন্ড গ্লো */
 .stApp { 
-    background: radial-gradient(circle at 15% 50%, rgba(76, 29, 149, 0.3), transparent 30%), 
-                radial-gradient(circle at 85% 30%, rgba(29, 78, 216, 0.3), transparent 30%), 
-                #0A0A0E !important; 
+    background: radial-gradient(circle at 10% 20%, rgba(139, 92, 246, 0.25), transparent 40%), 
+                radial-gradient(circle at 90% 80%, rgba(59, 130, 246, 0.25), transparent 40%), 
+                #09090B !important; 
     font-family: 'Inter', sans-serif; 
 }
 
@@ -87,11 +86,11 @@ div[data-testid="stForm"] {
     -webkit-backdrop-filter: blur(16px) !important;
     border: 1px solid rgba(255, 255, 255, 0.08) !important;
     border-radius: 16px !important;
-    padding: 40px !important;
+    padding: 35px !important;
     box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5) !important;
 }
 
-/* ৩. ইনপুট বক্স ফিক্স (মোটা সাদা বর্ডার সরানো) */
+/* ৩. ইনপুট বক্স ফিক্স */
 div[data-testid="stTextInput"] input {
     background: rgba(255, 255, 255, 0.05) !important;
     border: 1px solid rgba(255, 255, 255, 0.1) !important;
@@ -104,10 +103,9 @@ div[data-testid="stTextInput"] input:focus {
     border-color: #8B5CF6 !important;
     box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2) !important;
 }
-div[data-testid="stTextInput"] input::placeholder { color: #666 !important; }
 
-/* ৪. লগইন বাটন (গ্লোয়িং গ্রেডিয়েন্ট) */
-.stButton > button[kind="primary"] {
+/* ৪. লগইন বাটন (জোর করে কালার পরিবর্তন করা হলো) */
+div[data-testid="stFormSubmitButton"] > button {
     background: linear-gradient(135deg, #8B5CF6, #3B82F6) !important;
     border: none !important;
     border-radius: 8px !important;
@@ -117,31 +115,30 @@ div[data-testid="stTextInput"] input::placeholder { color: #666 !important; }
     box-shadow: 0 4px 20px rgba(139, 92, 246, 0.4) !important;
     transition: all 0.3s ease !important;
 }
-.stButton > button[kind="primary"]:hover {
+div[data-testid="stFormSubmitButton"] > button:hover {
     transform: translateY(-2px) !important;
     box-shadow: 0 6px 25px rgba(139, 92, 246, 0.6) !important;
 }
 
-/* গুগল বাটন (সেকেন্ডারি) */
-.stButton > button[kind="secondary"] {
+/* গুগল বাটন */
+.stButton > button {
     background: transparent !important;
     border: 1px solid rgba(255, 255, 255, 0.2) !important;
     border-radius: 8px !important;
     color: white !important;
-    font-weight: 500 !important;
-    padding: 10px 0 !important;
 }
-.stButton > button[kind="secondary"]:hover {
-    background: rgba(255, 255, 255, 0.05) !important;
-    border-color: rgba(255, 255, 255, 0.4) !important;
+.stButton > button:hover { border-color: rgba(255, 255, 255, 0.5) !important; }
+
+/* ট্যাব ডিজাইন (লগইন / সাইন আপ) */
+button[data-baseweb="tab"] {
+    color: #888 !important; font-weight: 500 !important;
+}
+button[data-baseweb="tab"][aria-selected="true"] {
+    color: #FFF !important; border-bottom-color: #8B5CF6 !important;
 }
 
-/* ট্যাব হাইড করা (শুধু লগইন দেখাবে) */
-div[data-testid="stTabs"] { display: none; }
-#MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;} 
-
-/* টেক্সট স্টাইল */
 h1, h2, h3, p, label { color: #FFFFFF !important; }
+#MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;} 
 </style>
 """
 
@@ -193,18 +190,14 @@ if not st.session_state.logged_in and "email" in st.query_params:
     st.session_state.user_email = st.query_params["email"]
     st.rerun()
 
-# ================= ৮. লগইন পেজ (আপনার ১ নম্বর ছবির ডিজাইন) =================
+# ================= ৮. লগইন ও সাইনআপ পেজ =================
 if not st.session_state.logged_in:
-    # লগইন পেজের CSS অ্যাপ্লাই করা হলো
     st.markdown(custom_css_login, unsafe_allow_html=True)
     
-    # সেন্টার কলাম তৈরি
     col1, col2, col3 = st.columns([1, 1.2, 1])
-    
     with col2:
-        # লোগো ও হেডার
         st.markdown("""
-        <div style='text-align: center; margin-bottom: 30px;'>
+        <div style='text-align: center; margin-bottom: 25px;'>
             <div style='display: flex; align-items: center; justify-content: center; gap: 10px;'>
                 <span style='font-size: 40px;'>⚡</span>
                 <h1 style='margin: 0; font-size: 32px; font-weight: 700; letter-spacing: 1px;'>ASIKERA</h1>
@@ -213,35 +206,50 @@ if not st.session_state.logged_in:
         </div>
         """, unsafe_allow_html=True)
         
-        # গ্লাসমরফিজম কার্ড (Form)
-        with st.form("login_form"):
-            st.markdown("<h2 style='margin-top:0;'>Welcome back</h2>", unsafe_allow_html=True)
-            st.markdown("<p style='font-size: 13px; color: #AAA; margin-bottom: 25px;'>Sign in to your ASIKERA workspace to continue</p>", unsafe_allow_html=True)
-            
-            # ইনপুট ফিল্ড (আইকনসহ)
-            l_email = st.text_input("Email", placeholder="✉️  you@company.com")
-            l_pass = st.text_input("Password", type="password", placeholder="🔒  ••••••••")
-            
-            # Remember me (সিমুলেট করা)
-            st.checkbox("Remember me")
-            
-            # লগইন বাটন
-            submit_login = st.form_submit_button("Login", use_container_width=True, type="primary")
-            
-            if submit_login:
-                if login_user(l_email, l_pass):
-                    st.session_state.logged_in = True
-                    st.session_state.user_email = l_email
-                    st.query_params["email"] = l_email
-                    st.rerun()
-                else: 
-                    st.error("Invalid credentials. Please try again.")
+        # ট্যাব ফিরিয়ে আনা হলো (Login / Sign Up)
+        tab1, tab2 = st.tabs(["Login", "Sign Up"])
         
-        # Continue with Google (সিমুলেট করা)
+        with tab1:
+            with st.form("login_form"):
+                st.markdown("<h2 style='margin-top:0; font-size: 24px;'>Welcome back</h2>", unsafe_allow_html=True)
+                st.markdown("<p style='font-size: 13px; color: #AAA; margin-bottom: 20px;'>Sign in to your workspace to continue</p>", unsafe_allow_html=True)
+                
+                l_email = st.text_input("Email", placeholder="✉️  you@company.com")
+                l_pass = st.text_input("Password", type="password", placeholder="🔒  ••••••••")
+                st.checkbox("Remember me")
+                
+                submit_login = st.form_submit_button("Login", use_container_width=True)
+                if submit_login:
+                    if login_user(l_email, l_pass):
+                        st.session_state.logged_in = True
+                        st.session_state.user_email = l_email
+                        st.query_params["email"] = l_email
+                        st.rerun()
+                    else: 
+                        st.error("Invalid email or password. (If new, please Sign Up)")
+        
+        with tab2:
+            with st.form("signup_form"):
+                st.markdown("<h2 style='margin-top:0; font-size: 24px;'>Create Account</h2>", unsafe_allow_html=True)
+                st.markdown("<p style='font-size: 13px; color: #AAA; margin-bottom: 20px;'>Join ASIKERA to start creating</p>", unsafe_allow_html=True)
+                
+                s_email = st.text_input("Email", placeholder="✉️  you@company.com", key="s_email")
+                s_pass = st.text_input("Password", type="password", placeholder="🔒  •••••••• (Min 6 chars)", key="s_pass")
+                
+                submit_signup = st.form_submit_button("Sign Up", use_container_width=True)
+                if submit_signup:
+                    if len(s_pass) < 6:
+                        st.warning("Password must be at least 6 characters long.")
+                    else:
+                        if create_user(s_email, s_pass):
+                            st.success("Account created! Please switch to Login tab.")
+                        else:
+                            st.error("This email is already registered. Please login.")
+                            
+        # গুগল বাটন ও ট্রাস্ট ব্যাজ
         st.markdown("<p style='text-align: center; color: #666; font-size: 12px; margin: 15px 0;'>Or continue with</p>", unsafe_allow_html=True)
-        st.button("G  Continue with Google", use_container_width=True, type="secondary")
+        st.button("G  Continue with Google", use_container_width=True)
         
-        # ট্রাস্ট ব্যাজ ও ফুটার
         st.markdown("""
         <div style='display: flex; justify-content: space-between; align-items: center; margin-top: 40px; font-size: 11px; color: #888;'>
             <span>🛡️ SOC 2 Compliant</span>
@@ -256,7 +264,6 @@ if not st.session_state.logged_in:
     st.stop()
 
 # ================= ৯. মেইন অ্যাপ (লগইন করার পর) =================
-# চ্যাটের জন্য আগের CSS অ্যাপ্লাই করা হলো
 st.markdown(custom_css_chat, unsafe_allow_html=True)
 
 if "chat_sessions" not in st.session_state:
