@@ -13,8 +13,9 @@ import pandas as pd
 import plotly.express as px
 from supabase import create_client, Client
 
-# ================= ১. পেজ কনফিগারেশন =================
-st.set_page_config(page_title="ASIKERA AI", page_icon="⚡", layout="wide", initial_sidebar_state="expanded")
+# ================= ১. পেজ কনফিগারেশন (লোগো যুক্ত করা হলো) =================
+# এখানে page_icon-এ "logo.png" দেওয়া হয়েছে
+st.set_page_config(page_title="ASIKERA AI", page_icon="logo.png", layout="wide", initial_sidebar_state="expanded")
 
 # ================= ২. আল্ট্রা-প্রিমিয়াম ডার্ক থিম CSS =================
 custom_css = """
@@ -159,13 +160,12 @@ if not st.session_state.logged_in:
                 else: st.error("Email already exists.")
     st.stop()
 
-# ================= ৮. সাইডবার (১০টি ক্যাটাগরি) =================
+# ================= ৮. সাইডবার (লোগো ও ১০টি ক্যাটাগরি) =================
 if "chat_sessions" not in st.session_state:
     st.session_state.chat_sessions = load_chats(st.session_state.user_email)
 if "current_session" not in st.session_state:
     st.session_state.current_session = list(st.session_state.chat_sessions.keys())[0]
 
-# ১০টি ক্যাটাগরি
 CATEGORIES = [
     "💬 General Chat", "👨‍💻 Coding Assistant", "📚 Learning & Study", "✍️ Writing & Editing", 
     "🔍 Deep Research (Agentic)", "🎨 Image Generation", "📄 File Analysis", "🌐 Web Search",
@@ -173,12 +173,22 @@ CATEGORIES = [
 ]
 
 with st.sidebar:
-    st.markdown("""
-    <div class="sidebar-header">
-        <div class="sidebar-title">⚡ ASIKERA</div>
-        <div class="sidebar-subtitle">KNOWLEDGE ERA</div>
-    </div>
-    """, unsafe_allow_html=True)
+    # লোগো ও টাইটেল একসাথে দেখানোর জন্য কলাম ব্যবহার
+    col_logo, col_text = st.columns([1, 3])
+    with col_logo:
+        try:
+            st.image("logo.png", use_container_width=True)
+        except:
+            st.markdown("⚡") # ছবি না পাওয়া গেলে ইমোজি দেখাবে
+    with col_text:
+        st.markdown("""
+        <div style='padding-top: 5px;'>
+            <div class="sidebar-title">ASIKERA</div>
+            <div class="sidebar-subtitle">KNOWLEDGE ERA</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+    st.write("") # ফাঁকা জায়গা
     
     if st.button("＋ New Chat", use_container_width=True, type="primary"):
         new_id = f"Chat {len(st.session_state.chat_sessions) + 1}"
@@ -191,18 +201,31 @@ with st.sidebar:
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
     st.markdown('<div class="label-text">✨ 10 AI Modes</div>', unsafe_allow_html=True)
     
-    # ক্যাটাগরি সিলেকশন
     selected_category = st.selectbox("Select Mode", CATEGORIES, label_visibility="collapsed")
     
-    # পার্সোনালিটি প্রম্পট
+    # =================== ৯. নতুন আপডেট করা স্যার ইংলিশ প্রম্পট ===================
     if selected_category == "👨‍💻 Coding Assistant":
         persona_prompt = "You are an expert programmer. Write clean, optimized code. Explain bugs clearly."
     elif selected_category == "📚 Learning & Study":
         persona_prompt = "You are a patient and brilliant tutor. Explain concepts simply, step-by-step."
     elif selected_category == "✍️ Writing & Editing":
         persona_prompt = "You are a professional editor and writer. Fix grammar, improve tone, and write compelling content."
+    
     elif selected_category == "🎓 English Board (Sir English)":
-        persona_prompt = "You are 'Sir English'. A strict English teacher. Correct grammar, explain rules in Bengali, and give examples."
+        # এখানে স্যার ইংলিশকে জিপিটি-৪ লেভেলের কঠোর এক্সামিনার বানানো হয়েছে
+        persona_prompt = """
+        You are 'Sir English', an elite, highly professional, and strict IELTS Examiner and English Professor (GPT-4 level). 
+        Your goal is to help the user master English with absolute precision.
+        
+        RULES:
+        1. If the user makes ANY grammatical, vocabulary, or structural mistake, point it out immediately in a strict but professional tone.
+        2. Provide a 'Correction' section. 
+        3. Provide a 'Detailed Explanation' section in Bengali so the user understands the exact rule.
+        4. Provide an 'Advanced Vocabulary/Phrasing' section to upgrade their English.
+        5. Format your response beautifully using Markdown (bold mistakes, use bullet points).
+        6. If the user provides a paragraph, grade it using IELTS band descriptors (e.g., 6.5, 7.0) and explain why.
+        """
+        
     elif selected_category == "🔍 Deep Research (Agentic)":
         persona_prompt = "You are a deep research agent. You will analyze the user's prompt, generate search queries, and synthesize a detailed report."
     else:
@@ -230,10 +253,9 @@ with st.sidebar:
         st.query_params.clear()
         st.rerun()
 
-# ================= ৯. মেইন অ্যাপ লজিক (টুলস) =================
+# ================= ১০. মেইন অ্যাপ লজিক =================
 current_messages = st.session_state.chat_sessions[st.session_state.current_session]
 
-# --- ১. ইমেজ জেনারেটর ---
 if selected_category == "🎨 Image Generation":
     st.markdown("### 🎨 AI Image Generator")
     img_prompt = st.text_input("Describe your image:")
@@ -244,7 +266,6 @@ if selected_category == "🎨 Image Generation":
                 image_url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width=1024&height=1024&nologo=true"
                 st.image(image_url, use_container_width=True)
 
-# --- ২. ফাইল এনালাইজার ---
 elif selected_category == "📄 File Analysis":
     st.markdown("### 📄 File Analyzer")
     uploaded_file = st.file_uploader("Upload PDF or Image", type=["pdf", "png", "jpg", "jpeg"])
@@ -258,7 +279,6 @@ elif selected_category == "📄 File Analysis":
             except Exception as e:
                 st.error(f"Error: {str(e)}")
 
-# --- ৩. ডেটা অ্যানালাইসিস ---
 elif selected_category == "📊 Data Analysis":
     st.markdown("### 📊 Data Visualization")
     csv_file = st.file_uploader("Upload CSV", type=["csv"])
@@ -278,7 +298,6 @@ elif selected_category == "📊 Data Analysis":
                 except Exception as e:
                     st.error(f"Error: {str(e)}")
 
-# --- ৪. ওয়েব সার্চ ---
 elif selected_category == "🌐 Web Search":
     st.markdown("### 🌐 Live Web Search")
     search_query = st.text_input("Search the web:")
@@ -293,7 +312,6 @@ elif selected_category == "🌐 Web Search":
             except Exception as e:
                 st.error(f"Error: {str(e)}")
 
-# --- ৫. Deep Research (Agentic) ---
 elif selected_category == "🔍 Deep Research (Agentic)":
     st.markdown("### 🔍 Agentic Deep Research")
     st.write("Ask a complex question. The AI will search the web, read multiple sources, and generate a comprehensive report.")
@@ -302,14 +320,12 @@ elif selected_category == "🔍 Deep Research (Agentic)":
     if st.button("Start Research", type="primary") and research_prompt:
         with st.spinner("Step 1: Generating search queries..."):
             try:
-                # Step 1: Generate queries
                 query_gen = groq_client.chat.completions.create(
                     model="openai/gpt-oss-120b", 
                     messages=[{"role": "system", "content": "Generate 3 specific search engine queries based on this topic. Output ONLY the queries separated by newlines."}, {"role": "user", "content": research_prompt}]
                 )
                 queries = query_gen.choices[0].message.content.strip().split('\n')
                 
-                # Step 2: Search Web
                 with st.spinner("Step 2: Browsing live internet..."):
                     all_results = []
                     for q in queries:
@@ -318,7 +334,6 @@ elif selected_category == "🔍 Deep Research (Agentic)":
                             all_results.extend(res)
                     context = "\n".join([f"Title: {r['title']}\nSnippet: {r['body']}" for r in all_results])
                 
-                # Step 3: Synthesize Report
                 with st.spinner("Step 3: Synthesizing comprehensive report..."):
                     final_report = groq_client.chat.completions.create(
                         model="openai/gpt-oss-120b",
@@ -332,21 +347,20 @@ elif selected_category == "🔍 Deep Research (Agentic)":
             except Exception as e:
                 st.error(f"Research Error: {str(e)}")
 
-# --- ৬. সাধারণ চ্যাট (বাকি সব ক্যাটাগরি) ---
 else:
-    # চ্যাট হিস্ট্রি রেন্ডার
     for m in current_messages:
-        avatar = "✨" if m["role"] == "assistant" else "👤"
+        # এখানে এআই-এর অ্যাভাটারে লোগো দেখানোর ব্যবস্থা করা হলো
+        avatar_ai = "logo.png" if "logo.png" else "✨"
+        avatar = avatar_ai if m["role"] == "assistant" else "👤"
         with st.chat_message(m["role"], avatar=avatar):
             st.markdown(m["content"])
 
-    # ইনপুট
     if prompt := st.chat_input("Ask ASIKERA anything..."):
         current_messages.append({"role":"user","content":prompt})
         with st.chat_message("user", avatar="👤"):
             st.markdown(prompt)
             
-        with st.chat_message("assistant", avatar="✨"):
+        with st.chat_message("assistant", avatar="logo.png" if "logo.png" else "✨"):
             with st.spinner("Thinking..."):
                 system_msg = {"role": "system", "content": persona_prompt}
                 stream = groq_client.chat.completions.create(
