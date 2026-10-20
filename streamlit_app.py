@@ -87,23 +87,41 @@ custom_css = f"""
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 .stApp {{ background: {bg_color}; font-family: 'Inter', sans-serif; color: {text_color}; }}
 [data-testid="stSidebar"] {{ background: {sidebar_bg}; border-right: 1px solid {border_color}; width: 280px !important; }}
-#MainMenu {{visibility: hidden;}} footer {{visibility: hidden;}} 
-[data-testid="stHeader"] {{ background: transparent !important; z-index: 99999 !important; }}
-[data-testid="collapsedControl"] {{ display: flex !important; visibility: visible !important; color: {text_color} !important; background-color: {border_color} !important; border-radius: 8px !important; position: fixed !important; top: 15px !important; left: 15px !important; z-index: 1000000 !important; }}
+
+/* ================= হেডার ও টুলবার ফিক্স ================= */
+#MainMenu {{visibility: hidden;}} 
+footer {{visibility: hidden;}} 
+[data-testid="stHeader"] {{ background: transparent !important; }}
+[data-testid="stToolbar"] {{ display: none !important; }} /* Share, Edit, Fork বাটন হাইড */
+[data-testid="stDecoration"] {{ display: none !important; }}
+
+/* মোবাইলে সাইডবার ওপেন করার বাটন (>>) দৃশ্যমান রাখা */
+[data-testid="collapsedControl"] {{
+    display: flex !important; visibility: visible !important;
+    color: {text_color} !important; background-color: {border_color} !important;
+    border-radius: 8px !important; position: fixed !important;
+    top: 15px !important; left: 15px !important; z-index: 1000000 !important;
+}}
+
 .block-container {{ padding-top: 2rem !important; padding-bottom: 6rem !important; max-width: 850px !important; margin: 0 auto !important; }}
 .stButton>button[kind="primary"] {{ background: #4D6BFE; border-radius: 10px; height: 40px; font-weight: 600; border: 0; color: white; }}
 .stButton>button[kind="secondary"] {{ background: {input_bg}; border: 1px solid {border_color}; border-radius: 10px; color: {text_color}; padding: 5px; font-size: 13px; }}
+
 div[data-testid="stChatMessage"] {{ background-color: transparent; padding: 10px 0; border: none; }}
 div[data-testid="stChatMessage"] h1, div[data-testid="stChatMessage"] h2, div[data-testid="stChatMessage"] h3, div[data-testid="stChatMessage"] h4, div[data-testid="stChatMessage"] strong {{ color: {text_color} !important; margin-top: 15px !important; margin-bottom: 10px !important; }}
 div[data-testid="stChatMessage"] p, div[data-testid="stChatMessage"] li {{ color: {text_color} !important; font-size: 15px !important; line-height: 1.6; }}
+
 div[data-testid="stChatMessage"] table {{ display: block !important; overflow-x: auto !important; border-collapse: collapse !important; margin: 15px 0 !important; width: 100% !important; }}
 div[data-testid="stChatMessage"] table th, div[data-testid="stChatMessage"] table td {{ color: {text_color} !important; border: 1px solid {border_color} !important; padding: 10px !important; background-color: {input_bg} !important; }}
+
 div[data-testid="stChatMessage"] pre {{ background-color: {input_bg} !important; border: 1px solid {border_color} !important; border-radius: 8px !important; padding: 12px !important; }}
 div[data-testid="stChatMessage"] code {{ color: #DC2626 !important; background-color: transparent !important; font-family: 'Courier New', monospace !important; }}
+
 div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"]) {{ flex-direction: row-reverse; text-align: right; margin-left: auto; margin-right: 0; width: fit-content; max-width: 85%; }}
 div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"]) .stMarkdown {{ background: {input_bg}; border: 1px solid {border_color}; padding: 12px 18px; border-radius: 20px 20px 4px 20px; display: inline-block; }}
 div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) {{ margin-right: auto; margin-left: 0; width: 100%; }}
 div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) .stMarkdown {{ background: {card_bg}; border: 1px solid {border_color}; padding: 18px 20px; border-radius: 20px 20px 20px 4px; display: inline-block; box-shadow: 0 2px 8px rgba(0,0,0,0.04); width: 100%; }}
+
 div[data-testid="stTextInput"] input {{ background-color: {input_bg} !important; color: {text_color} !important; border: 1px solid {border_color} !important; border-radius: 10px !important; }}
 div[data-testid="stChatInput"] {{ background-color: {card_bg} !important; border-radius: 12px !important; border: 1px solid {border_color} !important; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }}
 div[data-testid="stChatInput"] > div {{ background-color: {card_bg} !important; }}
@@ -111,6 +129,7 @@ div[data-testid="stChatInput"] textarea {{ color: {text_color} !important; backg
 div[data-testid="stChatInput"] button {{ background: #4D6BFE !important; border-radius: 8px !important; }}
 div[data-testid="stChatInput"] button svg {{ fill: white !important; }}
 div[data-testid="stSelectbox"] div[data-baseweb="select"] > div {{ background-color: {input_bg} !important; color: {text_color} !important; border: 1px solid {border_color} !important; }}
+
 .sidebar-title {{ font-size: 20px; font-weight: 700; color: {text_color}; margin: 0; }}
 .sidebar-subtitle {{ font-size: 10px; color: #6B7280; letter-spacing: 1.5px; margin-top: 5px; }}
 .divider {{ border-top: 1px solid {border_color}; margin: 15px 0; }}
@@ -172,7 +191,6 @@ if "chat_sessions" not in st.session_state:
 if "current_session" not in st.session_state:
     st.session_state.current_session = list(st.session_state.chat_sessions.keys())[0]
 
-# ================= ৪০+ ফিচারের ক্যাটাগরি লিস্ট =================
 CATEGORIES = [
     "💬 General Chat", "🎓 English Tutor", "👨‍💻 Coding Assistant", 
     "📚 Learning & Study", "✍️ Writing & Editing", "🔍 Deep Research", 
@@ -220,7 +238,7 @@ with st.sidebar:
     if selected_category == "🤖 Custom Persona":
         custom_persona = st.text_area("Define AI Personality:", "You are a helpful assistant.")
     
-    # প্রম্পট ইঞ্জিন (সব ফিচারের জন্য আলাদা প্রম্পট)
+    # প্রম্পট ইঞ্জিন
     base_identity = "You are ASIKERA. Do not mention OpenAI or Google. "
     prompts = {
         "🎓 English Tutor": "You are Sir English, an elite IELTS examiner. Correct grammar, explain in Bengali.",
@@ -249,7 +267,6 @@ with st.sidebar:
     }
     persona_prompt = base_identity + prompts.get(selected_category, "You are a smart and helpful AI.")
 
-    # চ্যাট এক্সপোর্ট
     if st.session_state.chat_sessions[st.session_state.current_session]:
         chat_text = "\n\n".join([f"{m['role'].upper()}: {m['content']}" for m in st.session_state.chat_sessions[st.session_state.current_session]])
         st.download_button("📥 Export Chat (TXT)", data=chat_text, file_name="asikera_chat.txt", use_container_width=True)
@@ -305,7 +322,7 @@ elif selected_category == "📊 Data Analysis":
             with st.spinner("Generating..."):
                 try:
                     sys_prompt = f"Write ONLY Python code using 'plotly.express as px' for DataFrame 'df' with columns {list(df.columns)}. Store result in 'fig'."
-                    res = groq_client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": chart_prompt}], temperature=0.1)
+                    res = groq_client.chat.completions.create(model="openai/gpt-oss-120b", messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": chart_prompt}], temperature=0.1)
                     code = res.choices[0].message.content.replace("```python", "").replace("```", "").strip()
                     local_vars = {'df': df, 'px': px}
                     exec(code, globals(), local_vars)
@@ -321,7 +338,7 @@ elif selected_category == "🌐 Web Search":
                 results = list(DDGS().text(search_query, max_results=4))
                 if results:
                     context = "\n".join([f"Snippet: {r['body']}" for r in results])
-                    res = groq_client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role": "system", "content": f"Answer based on these search results:\n{context}"}, {"role": "user", "content": search_query}])
+                    res = groq_client.chat.completions.create(model="openai/gpt-oss-120b", messages=[{"role": "system", "content": f"Answer based on these search results:\n{context}"}, {"role": "user", "content": search_query}])
                     st.markdown(res.choices[0].message.content)
             except Exception as e: st.error(f"Error: {e}")
 
@@ -331,7 +348,7 @@ elif selected_category == "🔍 Deep Research":
     if st.button("Start Research", type="primary") and research_prompt:
         with st.spinner("Browsing live internet and generating report..."):
             try:
-                query_gen = groq_client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role": "system", "content": "Generate 3 search queries based on this topic. Output ONLY the queries separated by newlines."}, {"role": "user", "content": research_prompt}])
+                query_gen = groq_client.chat.completions.create(model="openai/gpt-oss-120b", messages=[{"role": "system", "content": "Generate 3 search queries based on this topic. Output ONLY the queries separated by newlines."}, {"role": "user", "content": research_prompt}])
                 queries = query_gen.choices[0].message.content.strip().split('\n')
                 all_results = []
                 for q in queries:
@@ -339,7 +356,7 @@ elif selected_category == "🔍 Deep Research":
                         res = list(DDGS().text(q, max_results=3))
                         all_results.extend(res)
                 context = "\n".join([f"Title: {r['title']}\nSnippet: {r['body']}" for r in all_results])
-                final_report = groq_client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role": "system", "content": "Synthesize into a highly detailed report with headings."}, {"role": "user", "content": f"Topic: {research_prompt}\n\nResults:\n{context}"}], temperature=0.5, max_tokens=2000)
+                final_report = groq_client.chat.completions.create(model="openai/gpt-oss-120b", messages=[{"role": "system", "content": "Synthesize into a highly detailed report with headings."}, {"role": "user", "content": f"Topic: {research_prompt}\n\nResults:\n{context}"}], temperature=0.5, max_tokens=2000)
                 st.markdown(final_report.choices[0].message.content)
             except Exception as e: st.error(f"Error: {e}")
 
@@ -352,7 +369,7 @@ elif selected_category == "🌍 Translator":
     if st.button("Translate", type="primary") and text_to_translate:
         with st.spinner("Translating..."):
             prompt = f"Translate the following text from {src_lang} to {tgt_lang}. Only output the translation: \n\n{text_to_translate}"
-            res = groq_client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role": "user", "content": prompt}])
+            res = groq_client.chat.completions.create(model="openai/gpt-oss-120b", messages=[{"role": "user", "content": prompt}])
             st.success(res.choices[0].message.content)
 
 elif selected_category == "🔗 URL Reader":
@@ -367,7 +384,7 @@ elif selected_category == "🔗 URL Reader":
                 soup = BeautifulSoup(page.content, 'html.parser')
                 text = soup.get_text(separator=' ', strip=True)[:5000]
                 prompt = f"Based on the following website content, answer this: {url_query if url_query else 'Summarize this page'}\n\nContent:\n{text}"
-                res = groq_client.chat.completions.create(model="llama-3.3-70b-versatile", messages=[{"role": "user", "content": prompt}])
+                res = groq_client.chat.completions.create(model="openai/gpt-oss-120b", messages=[{"role": "user", "content": prompt}])
                 st.markdown(res.choices[0].message.content)
             except Exception as e: st.error(f"Failed to read URL: {e}")
 
@@ -405,7 +422,7 @@ else:
                 else:
                     system_msg = {"role": "system", "content": persona_prompt}
                     stream = groq_client.chat.completions.create(
-                        model="llama-3.3-70b-versatile", 
+                        model="openai/gpt-oss-120b", 
                         messages=[system_msg] + current_messages[-10:], 
                         temperature=0.7, max_tokens=1500, stream=True
                     )
