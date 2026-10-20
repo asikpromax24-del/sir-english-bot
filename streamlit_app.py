@@ -16,19 +16,23 @@ from supabase import create_client, Client
 # ================= ১. পেজ কনফিগারেশন =================
 st.set_page_config(page_title="ASIKERA AI", page_icon="⚡", layout="wide", initial_sidebar_state="expanded")
 
-# ================= ২. আল্ট্রা-প্রিমিয়াম CSS (মোবাইল ও স্ক্রিন সাইজ ফিক্স) =================
+# ================= ২. আল্ট্রা-প্রিমিয়াম CSS (DeepSeek স্টাইল) =================
 custom_css = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
 
-/* গ্লোবাল ডার্ক থিম */
-.stApp { background: #0E0E11; font-family: 'Inter', sans-serif; color: #E2E8F0; }
+/* গ্লোবাল ডার্ক থিম (DeepSeek স্টাইল) */
+.stApp { background: #1E1E1E; font-family: 'Inter', sans-serif; color: #E0E0E0; }
 
-/* ================= সাইডবার ছোট করা (যাতে মেইন স্ক্রিন বড় হয়) ================= */
+/* ================= সাইডবার ছোট ও মিনিমাল করা ================= */
 [data-testid="stSidebar"] { 
-    background: #15151A; 
-    border-right: 1px solid #2A2A35; 
-    width: 280px !important; /* সাইডবারের সাইজ ছোট করা হলো */
+    background: #191919; 
+    border-right: 1px solid #333; 
+    width: 240px !important; /* সাইডবার ছোট করা হলো */
+    min-width: 240px !important;
+}
+[data-testid="stSidebar"] .stButton>button {
+    padding: 5px 10px !important; font-size: 12px !important; height: 32px !important;
 }
 
 /* হেডার এবং Fork বাটন হাইড করা */
@@ -40,82 +44,74 @@ custom_css = """
 /* মোবাইলে সাইডবার ওপেন বাটন */
 [data-testid="collapsedControl"] {
     display: flex !important; visibility: visible !important;
-    color: #FFF !important; background-color: #2A2A35 !important;
-    border-radius: 8px !important; margin: 10px !important;
-    position: absolute; top: 10px; left: 10px; z-index: 99999;
+    color: #FFF !important; background-color: #333 !important;
+    border-radius: 5px !important; margin: 10px !important;
 }
 
-/* ================= মেইন কন্টেইনার ফুল স্ক্রিন করা ================= */
+/* মেইন কন্টেইনার (DeepSeek স্টাইল সেন্টারড) */
 .block-container { 
     padding-top: 2rem !important; 
     padding-bottom: 5rem !important; 
-    padding-left: 1rem !important; 
-    padding-right: 1rem !important;
-    max-width: 100% !important; /* মেইন কন্টেইনার ফুল উইডথ */
+    max-width: 800px !important; /* লেখা যেন খুব বেশি ছড়িয়ে না যায় */
+    margin: 0 auto !important;
 }
 
-/* বাটন ডিজাইন */
-.stButton>button[kind="primary"] { background: linear-gradient(90deg, #6366F1, #A855F7); border-radius: 12px; height: 45px; font-weight: 600; border: 0; color: white; box-shadow: 0 4px 10px rgba(99, 102, 241, 0.3); transition: 0.2s; }
-.stButton>button[kind="secondary"] { background: #1E1E24; border: 1px solid #333; border-radius: 10px; color: #A0A0B0; padding: 10px; font-size: 13px; transition: 0.3s; }
-.stButton>button[kind="secondary"]:hover { background: #2A2A35; color: white; border-color: #6366F1; }
+/* বাটন ডিজাইন (মিনিমাল) */
+.stButton>button[kind="primary"] { 
+    background: #4D6BFE; border-radius: 8px; height: 35px; font-weight: 500; border: 0; color: white; font-size: 13px;
+}
+.stButton>button[kind="secondary"] { 
+    background: #252525; border: 1px solid #333; border-radius: 8px; color: #AAA; padding: 5px; font-size: 12px; 
+}
+.stButton>button[kind="secondary"]:hover { background: #333; color: white; }
 
-/* ================= চ্যাট ডিজাইন (লেখা ছোট ও টেবিল ফিক্স) ================= */
-div[data-testid="stChatMessage"] { background-color: transparent; padding: 8px 0; border: none; }
-div[data-testid="stChatMessage"] p, div[data-testid="stChatMessage"] li { color: #E2E8F0 !important; font-size: 14px !important; line-height: 1.5; }
+/* ================= চ্যাট ডিজাইন ================= */
+div[data-testid="stChatMessage"] { background-color: transparent; padding: 10px 0; border: none; }
+div[data-testid="stChatMessage"] p, div[data-testid="stChatMessage"] li { color: #E0E0E0 !important; font-size: 14px !important; line-height: 1.6; }
 
 /* ইউজার মেসেজ */
-div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"]) { flex-direction: row-reverse; text-align: right; margin-left: auto; margin-right: 0; width: fit-content; max-width: 85%; }
-div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"]) .stMarkdown { background: #1E1E24; padding: 10px 15px; border-radius: 20px 20px 5px 20px; display: inline-block; }
+div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"]) { flex-direction: row-reverse; text-align: right; margin-left: auto; margin-right: 0; width: fit-content; max-width: 90%; }
+div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"]) .stMarkdown { background: #2A2A2A; padding: 10px 15px; border-radius: 15px 15px 2px 15px; display: inline-block; }
 
 /* এআই মেসেজ */
-div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) { margin-right: auto; margin-left: 0; width: fit-content; max-width: 95%; }
-div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) .stMarkdown { background: #25252D; padding: 15px; border-radius: 20px 20px 20px 5px; display: inline-block; }
+div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) { margin-right: auto; margin-left: 0; width: 100%; }
+div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) .stMarkdown { background: transparent; padding: 10px 0; display: inline-block; }
 
-/* ================= টেবিল ভেঙে যাওয়া বন্ধ করা ================= */
-div[data-testid="stChatMessage"] table {
-    display: block !important;
-    overflow-x: auto !important; /* টেবিল বড় হলে স্ক্রল হবে */
-    white-space: nowrap !important;
-    border-collapse: collapse !important;
-    margin: 10px 0 !important;
-}
-div[data-testid="stChatMessage"] th, div[data-testid="stChatMessage"] td { 
-    color: #E2E8F0 !important; 
-    border: 1px solid #444 !important; 
-    padding: 6px 10px !important; 
-    font-size: 13px !important;
-}
+/* টেবিল ফিক্স */
+div[data-testid="stChatMessage"] table { display: block !important; overflow-x: auto !important; border-collapse: collapse !important; margin: 10px 0 !important; }
+div[data-testid="stChatMessage"] th, div[data-testid="stChatMessage"] td { color: #E0E0E0 !important; border: 1px solid #444 !important; padding: 6px 12px !important; font-size: 13px !important; }
 
-/* ================= চ্যাট ইনপুট বক্স ================= */
+/* ================= ইনপুট বক্স (DeepSeek স্টাইল) ================= */
 div[data-testid="stChatInput"] { 
-    background-color: #15151A !important; 
-    border-radius: 25px !important; 
+    background-color: #252525 !important; 
+    border-radius: 8px !important; 
     border: 1px solid #444 !important; 
-    padding: 5px;
+    padding: 0px 10px !important;
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: 80%; max-width: 700px;
+    z-index: 999;
 }
-div[data-testid="stChatInput"] textarea { 
-    color: #FFFFFF !important; 
-    font-size: 15px !important;
-}
-div[data-testid="stChatInput"] textarea::placeholder { color: #888888 !important; }
-div[data-testid="stChatInput"] button { 
-    background: linear-gradient(90deg, #6366F1, #A855F7) !important; 
-    border-radius: 50% !important; 
-}
+div[data-testid="stChatInput"] textarea { color: #FFF !important; font-size: 14px !important; }
+div[data-testid="stChatInput"] textarea::placeholder { color: #888 !important; }
+div[data-testid="stChatInput"] button { background: #4D6BFE !important; border-radius: 5px !important; padding: 5px !important; }
 div[data-testid="stChatInput"] button svg { fill: white !important; }
 
-/* সাইডবার টেক্সট */
-.sidebar-header { padding: 20px 10px 10px 10px; }
-.sidebar-title { font-size: 20px; font-weight: 800; color: #FFF; margin: 0; letter-spacing: 1px; }
-.sidebar-subtitle { font-size: 9px; color: #888; letter-spacing: 1.5px; margin-top: 5px; font-weight: 600; }
-.divider { border-top: 1px solid #1F1F27; margin: 15px 0; }
-.label-text { font-size: 11px; color: #888; margin-bottom: 8px; font-weight: 500; }
+/* সাইডবার টেক্সট ও স্পেসিং */
+.sidebar-header { padding: 15px 10px 10px 10px; }
+.sidebar-title { font-size: 18px; font-weight: 600; color: #FFF; margin: 0; letter-spacing: 0.5px; }
+.sidebar-subtitle { font-size: 9px; color: #777; letter-spacing: 1px; margin-top: 5px; font-weight: 500; }
+.divider { border-top: 1px solid #333; margin: 15px 0; }
+.label-text { font-size: 11px; color: #777; margin-bottom: 8px; font-weight: 500; }
 
 /* ইউজার কার্ড */
-.user-card { display: flex; align-items: center; background: #1E1E24; padding: 8px; border-radius: 8px; border: 1px solid #333; margin-bottom: 10px; }
-.user-avatar { background: #6366F1; color: white; border-radius: 50%; width: 25px; height: 25px; display: flex; align-items: center; justify-content: center; font-size: 12px; margin-right: 8px; }
-.user-email { font-size: 11px; color: #E2E8F0; overflow: hidden; text-overflow: ellipsis; }
-.footer-text { text-align: center; color: #555; font-size: 9px; margin-top: 20px; }
+.user-card { display: flex; align-items: center; background: #252525; padding: 8px; border-radius: 8px; border: 1px solid #333; margin-bottom: 10px; }
+.user-avatar { background: #4D6BFE; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 12px; margin-right: 10px; }
+.user-email { font-size: 11px; color: #E0E0E0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.footer-text { text-align: center; color: #555; font-size: 9px; margin-top: 10px; }
+
+/* অন্যান্য ইনপুট বক্স (Search Web) */
+div[data-testid="stTextInput"] input { 
+    background-color: #252525 !important; border: 1px solid #444; color: #FFF !important; border-radius: 8px;
+}
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
@@ -173,12 +169,12 @@ if not st.session_state.logged_in and "email" in st.query_params:
 
 # ================= ৭. লগইন পেজ =================
 if not st.session_state.logged_in:
-    st.markdown("<h2 style='text-align: center; margin-top: 50px; font-weight:800; color:white; letter-spacing:2px;'>⚡ ASIKERA</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color:#888; font-size:12px; letter-spacing:1px;'>ASIKUL'S KNOWLEDGE ERA</p>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: center; margin-top: 80px; font-weight:600; color:white;'>⚡ ASIKERA</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color:#777; font-size:12px; letter-spacing:1px; margin-bottom:40px;'>ASIKUL'S KNOWLEDGE ERA</p>", unsafe_allow_html=True)
     
-    col1, col2, col3 = st.columns([1,2,1])
+    col1, col2, col3 = st.columns([1,1.5,1])
     with col2:
-        tab1, tab2 = st.tabs(["🔐 Login", "📝 Sign Up"])
+        tab1, tab2 = st.tabs(["Login", "Sign Up"])
         with tab1:
             l_email = st.text_input("Email", key="l_email")
             l_pass = st.text_input("Password", type="password", key="l_pass")
@@ -197,7 +193,7 @@ if not st.session_state.logged_in:
                 else: st.error("Email already exists.")
     st.stop()
 
-# ================= ৮. সাইডবার =================
+# ================= ৮. সাইডবার (DeepSeek স্টাইল) =================
 if "chat_sessions" not in st.session_state:
     st.session_state.chat_sessions = load_chats(st.session_state.user_email)
 if "current_session" not in st.session_state:
@@ -207,7 +203,7 @@ with st.sidebar:
     st.markdown("""
     <div class="sidebar-header">
         <div class="sidebar-title">⚡ ASIKERA</div>
-        <div class="sidebar-subtitle">ASIKUL'S KNOWLEDGE ERA</div>
+        <div class="sidebar-subtitle">KNOWLEDGE ERA</div>
     </div>
     """, unsafe_allow_html=True)
     
@@ -217,10 +213,10 @@ with st.sidebar:
         st.session_state.current_session = new_id
         st.rerun()
         
-    search_query = st.text_input("Search", placeholder="🔍 Search chats...", label_visibility="collapsed")
+    search_query = st.text_input("Search", placeholder="Search chats...", label_visibility="collapsed")
     
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-    st.markdown('<div class="label-text">✨ Choose AI Version</div>', unsafe_allow_html=True)
+    st.markdown('<div class="label-text">AI Versions</div>', unsafe_allow_html=True)
     
     col_p1, col_p2 = st.columns(2)
     with col_p1:
@@ -228,7 +224,7 @@ with st.sidebar:
         if st.button("Quantum", use_container_width=True, type="secondary"): st.session_state.persona = "quantum"
     with col_p2:
         if st.button("Orion", use_container_width=True, type="secondary"): st.session_state.persona = "orion"
-        if st.button("English Board", use_container_width=True, type="secondary"): st.session_state.persona = "english"
+        if st.button("English", use_container_width=True, type="secondary"): st.session_state.persona = "english"
 
     if "persona" not in st.session_state: st.session_state.persona = "nova"
     
@@ -242,11 +238,11 @@ with st.sidebar:
         persona_prompt = "You are Nova, smart and fast. Answer clearly."
 
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-    st.markdown('<div class="label-text">⚡ Mode</div>', unsafe_allow_html=True)
+    st.markdown('<div class="label-text">Tools</div>', unsafe_allow_html=True)
     tool = st.selectbox("Mode", ["Chat", "Image Gen", "File Analyzer", "Web Search"], label_visibility="collapsed")
     
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-    st.markdown('<div class="label-text">💬 Recent</div>', unsafe_allow_html=True)
+    st.markdown('<div class="label-text">Recent</div>', unsafe_allow_html=True)
     
     filtered_sessions = [s for s in st.session_state.chat_sessions.keys() if search_query.lower() in s.lower()]
     for s in filtered_sessions:
@@ -263,16 +259,17 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
     
-    if st.button("🚪 Logout", use_container_width=True, type="secondary"):
+    if st.button("Logout", use_container_width=True, type="secondary"):
         st.session_state.logged_in = False
         st.query_params.clear()
         st.rerun()
         
-    st.markdown("<div class='footer-text'>ASIKERA • 1.0</div>", unsafe_allow_html=True)
+    st.markdown("<div class='footer-text'>ASIKERA v1.0</div>", unsafe_allow_html=True)
 
 # ================= ৯. মেইন অ্যাপ লজিক =================
 current_messages = st.session_state.chat_sessions[st.session_state.current_session]
 
+# --- চ্যাট মোড ---
 if tool == "Chat":
     for m in current_messages:
         avatar = "✨" if m["role"] == "assistant" else "👤"
@@ -285,7 +282,7 @@ if tool == "Chat":
             st.markdown(prompt)
             
         with st.chat_message("assistant", avatar="✨"):
-            with st.spinner("ASIKERA is thinking..."):
+            with st.spinner("Thinking..."):
                 system_msg = {"role": "system", "content": persona_prompt}
                 stream = groq_client.chat.completions.create(
                     model="openai/gpt-oss-120b", 
@@ -300,22 +297,23 @@ if tool == "Chat":
             audio_data = generate_audio_edge(reply)
             if audio_data: st.audio(audio_data, format="audio/mp3", autoplay=True)
 
-# --- অন্যান্য টুল ---
+# --- ইমেজ জেনারেটর ---
 elif tool == "Image Gen":
-    st.markdown("### 🖼️ ASIKERA Image Gen")
+    st.markdown("### Image Generator")
     img_prompt = st.text_input("Describe your image:")
-    if st.button("Generate Image", type="primary"):
+    if st.button("Generate", type="primary"):
         if img_prompt:
             with st.spinner("Painting..."):
                 safe_prompt = urllib.parse.quote(img_prompt)
                 image_url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width=1024&height=1024&nologo=true"
                 st.image(image_url, use_container_width=True)
 
+# --- ফাইল এনালাইজার ---
 elif tool == "File Analyzer":
-    st.markdown("### 📄 ASIKERA File Analyzer")
-    uploaded_file = st.file_uploader("Upload a PDF or Image", type=["pdf", "png", "jpg", "jpeg"])
+    st.markdown("### File Analyzer")
+    uploaded_file = st.file_uploader("Upload PDF/Image", type=["pdf", "png", "jpg", "jpeg"])
     file_query = st.text_input("What do you want to know?")
-    if st.button("Analyze File", type="primary") and uploaded_file and file_query:
+    if st.button("Analyze", type="primary") and uploaded_file and file_query:
         with st.spinner("Analyzing..."):
             try:
                 gemini_model = genai.GenerativeModel('gemini-1.5-flash')
@@ -324,8 +322,9 @@ elif tool == "File Analyzer":
             except Exception as e:
                 st.error(f"Error: {str(e)}")
 
+# --- ওয়েব সার্চ ---
 elif tool == "Web Search":
-    st.markdown("### 🌐 ASIKERA Web Search")
+    st.markdown("### Web Search")
     search_query = st.text_input("Search the web:")
     if st.button("Search", type="primary") and search_query:
         with st.spinner("Searching..."):
