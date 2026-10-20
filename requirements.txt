@@ -6,5 +6,6 @@ edge-tts
 langdetect
 pandas
 plotly
-extra-streamlit-components
 supabase
+beautifulsoup4
+requests
