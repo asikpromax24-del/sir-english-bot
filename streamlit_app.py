@@ -42,6 +42,123 @@ if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
 supabase: Client | None = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL and SUPABASE_KEY else None
 
+
+# ================= SUBSCRIPTION / PAYMENT CONFIG =================
+# Receiver details are public payment instructions, not API secrets.
+PAYMENT_DETAILS = {
+    "bKash": "01608364088",
+    "Rocket": "01608364088",
+    "Binance Pay ID": "1076189034",
+    "USDT (TRC20)": "TKeEd3wuTqHse2rdzAg3rqYeRfQD1NC7tq",
+    "USDT (BEP20 / BNB Smart Chain)": "0xb83a03d9ded3ac7a4908aa87cfdfe1df9e05f719",
+}
+PLANS = {
+    "Monthly": {"days": 30, "bdt": 299, "usd": 3.99},
+    "Quarterly": {"days": 90, "bdt": 799, "usd": 10.99},
+    "Yearly": {"days": 365, "bdt": 2999, "usd": 39.99},
+}
+FREE_DAILY_LIMIT = 10
+
+def _utc_now():
+    return datetime.datetime.now(datetime.timezone.utc)
+
+def _admin_emails():
+    raw = get_secret("ADMIN_EMAILS", "") or ""
+    if isinstance(raw, list):
+        return {str(x).strip().lower() for x in raw if str(x).strip()}
+    return {x.strip().lower() for x in str(raw).split(",") if x.strip()}
+
+def is_admin(email):
+    return (email or "").strip().lower() in _admin_emails()
+
+def get_subscription(email):
+    if not supabase:
+        return None
+    try:
+        r = supabase.table("subscriptions").select("status,plan,expires_at").eq("user_email", email.lower()).eq("status", "active").order("expires_at", desc=True).limit(1).execute()
+        if not r.data:
+            return None
+        sub = r.data[0]
+        expires = datetime.datetime.fromisoformat(str(sub["expires_at"]).replace("Z", "+00:00"))
+        if expires > _utc_now():
+            return sub
+        try:
+            supabase.table("subscriptions").update({"status": "expired"}).eq("user_email", email.lower()).eq("status", "active").execute()
+        except Exception:
+            pass
+    except Exception:
+        return None
+    return None
+
+def daily_usage(email):
+    if not supabase:
+        return 0
+    today = _utc_now().date().isoformat()
+    try:
+        r = supabase.table("daily_usage").select("message_count").eq("user_email", email.lower()).eq("usage_date", today).limit(1).execute()
+        return int(r.data[0]["message_count"]) if r.data else 0
+    except Exception:
+        return 0
+
+def increment_daily_usage(email):
+    if not supabase:
+        return False
+    today = _utc_now().date().isoformat()
+    try:
+        r = supabase.table("daily_usage").select("id,message_count").eq("user_email", email.lower()).eq("usage_date", today).limit(1).execute()
+        if r.data:
+            row = r.data[0]
+            supabase.table("daily_usage").update({"message_count": int(row["message_count"]) + 1}).eq("id", row["id"]).execute()
+        else:
+            supabase.table("daily_usage").insert({"user_email": email.lower(), "usage_date": today, "message_count": 1}).execute()
+        return True
+    except Exception:
+        return False
+
+def submit_payment_request(email, plan, method, transaction_ref):
+    if not supabase:
+        return False, "Supabase is not configured."
+    if not transaction_ref.strip():
+        return False, "Enter the transaction/reference ID first."
+    try:
+        supabase.table("payment_requests").insert({
+            "user_email": email.lower(), "plan": plan, "payment_method": method,
+            "transaction_ref": transaction_ref.strip(), "amount_bdt": PLANS[plan]["bdt"],
+            "amount_usd": PLANS[plan]["usd"], "status": "pending"
+        }).execute()
+        return True, "Request submitted. Premium will activate after admin approval."
+    except Exception as e:
+        return False, "Could not submit request. Confirm the subscription SQL has been run in Supabase."
+
+def approve_payment_request(request_id, admin_email):
+    if not supabase or not is_admin(admin_email):
+        return False, "Admin permission is not configured for this account."
+    try:
+        result = supabase.table("payment_requests").select("id,user_email,plan,status").eq("id", request_id).eq("status", "pending").limit(1).execute()
+        if not result.data:
+            return False, "Request is no longer pending."
+        req = result.data[0]
+        existing = get_subscription(req["user_email"])
+        now = _utc_now()
+        if existing:
+            exp = datetime.datetime.fromisoformat(str(existing["expires_at"]).replace("Z", "+00:00"))
+            start = max(now, exp)
+        else:
+            start = now
+        expires = start + datetime.timedelta(days=PLANS[req["plan"]]["days"])
+        # Idempotency guard: if an earlier approval inserted the subscription but
+        # failed before updating the request status, finish that update safely.
+        prior = supabase.table("subscriptions").select("id,expires_at").eq("payment_request_id", request_id).limit(1).execute()
+        if prior.data:
+            supabase.table("payment_requests").update({"status": "approved", "reviewed_by": admin_email.lower(), "reviewed_at": now.isoformat()}).eq("id", request_id).execute()
+            return True, f"This request was already activated until {str(prior.data[0]['expires_at'])[:10]}."
+        # Insert entitlement first; the unique payment_request_id prevents double activation.
+        supabase.table("subscriptions").insert({"user_email": req["user_email"], "plan": req["plan"], "status": "active", "starts_at": now.isoformat(), "expires_at": expires.isoformat(), "approved_by": admin_email.lower(), "payment_request_id": request_id}).execute()
+        supabase.table("payment_requests").update({"status": "approved", "reviewed_by": admin_email.lower(), "reviewed_at": now.isoformat()}).eq("id", request_id).eq("status", "pending").execute()
+        return True, f"Approved for {req['user_email']} until {expires.date().isoformat()}."
+    except Exception:
+        return False, "Approval failed. Check Supabase tables and permissions, then review the request status."
+
 # ================= ২. ডেটাবেস ফাংশন (Supabase) =================
 def make_hashes(password):
     # PBKDF2 is deliberately slow; format is self-describing for future upgrades.
@@ -320,8 +437,17 @@ with st.sidebar:
     search_query = st.text_input("Search", placeholder="Search chats...", label_visibility="collapsed")
     
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+    premium_for_modes = bool(get_subscription(st.session_state.user_email))
     st.markdown('<div class="label-text">✨ 30+ Modes</div>', unsafe_allow_html=True)
-    selected_category = st.selectbox("Select Mode", CATEGORIES, label_visibility="collapsed")
+    free_categories = [
+        "💬 General Chat", "🎓 English Tutor", "👨‍💻 Coding Assistant",
+        "📚 Learning & Study", "✍️ Writing & Editing", "📝 Text Summarizer",
+        "💡 Idea Generator", "📧 Email Writer", "📖 Story Writer"
+    ]
+    mode_options = CATEGORIES if premium_for_modes else free_categories
+    selected_category = st.selectbox("Select Mode", mode_options, label_visibility="collapsed")
+    if not premium_for_modes:
+        st.caption("Free plan: 9 basic modes. Premium unlocks all 30+ modes and advanced tools.")
     
     theme_toggle = st.checkbox("🌙 Dark Mode" if st.session_state.theme == "Light" else "☀️ Light Mode")
     if theme_toggle:
@@ -329,7 +455,7 @@ with st.sidebar:
         st.rerun()
         
     voice_gender = st.radio("Voice", ["Female", "Male"], horizontal=True)
-    chat_provider = st.selectbox("AI Provider", ["Groq", "Gemini"], index=0, help="Groq powers text chat by default; Gemini can be selected here. File and image analysis continue to use Gemini.")
+    chat_provider = st.selectbox("AI Engine", ["Fast", "Smart"], index=0, help="Choose the ASIKERA Fast or Smart engine.")
     
     custom_persona = ""
     if selected_category == "🤖 Custom Persona":
@@ -380,6 +506,54 @@ with st.sidebar:
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
     st.markdown(f"""<div class="user-card"><div class="user-avatar">👤</div><div class="user-email">{st.session_state.user_email}</div></div>""", unsafe_allow_html=True)
     
+    # Subscription panel
+    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+    st.markdown("### 👑 ASIKERA Premium")
+    active_sub = get_subscription(st.session_state.user_email)
+    used_today = daily_usage(st.session_state.user_email)
+    if active_sub:
+        st.success(f"Premium active · {active_sub['plan']}\nExpires: {str(active_sub['expires_at'])[:10]}")
+        st.caption("Premium includes all modes, file/PDF analysis, image generation, voice input and higher usage allowance (fair-use applies).")
+    else:
+        st.info(f"Free plan · {used_today}/{FREE_DAILY_LIMIT} messages used today (UTC)")
+        with st.expander("Upgrade to Premium", expanded=False):
+            chosen_plan = st.selectbox("Choose a plan", list(PLANS.keys()), format_func=lambda x: f"{x} — ৳{PLANS[x]['bdt']} / ${PLANS[x]['usd']}")
+            chosen_method = st.selectbox("Payment method", list(PAYMENT_DETAILS.keys()))
+            st.code(PAYMENT_DETAILS[chosen_method])
+            st.caption("Send the exact plan amount using the selected method. For crypto, verify the network before sending. Payments are manually reviewed; do not send extra funds.")
+            txn_ref = st.text_input("Transaction ID / payment reference", key="premium_txn_ref")
+            if st.button("Submit payment for approval", use_container_width=True, type="primary"):
+                ok, msg = submit_payment_request(st.session_state.user_email, chosen_plan, chosen_method, txn_ref)
+                (st.success if ok else st.error)(msg)
+            if supabase:
+                try:
+                    mine = supabase.table("payment_requests").select("plan,payment_method,status,created_at").eq("user_email", st.session_state.user_email.lower()).order("created_at", desc=True).limit(5).execute().data or []
+                    if mine:
+                        st.caption("Recent payment requests")
+                        for req in mine:
+                            st.write(f"{req['plan']} · {req['payment_method']} · {req['status']}")
+                except Exception:
+                    pass
+
+    if is_admin(st.session_state.user_email):
+        with st.expander("🛡️ Admin: payment approvals"):
+            if not supabase:
+                st.error("Supabase is not configured.")
+            else:
+                try:
+                    pending = supabase.table("payment_requests").select("id,user_email,plan,payment_method,transaction_ref,amount_bdt,amount_usd,created_at").eq("status", "pending").order("created_at", desc=False).execute().data or []
+                    if not pending:
+                        st.caption("No pending payment requests.")
+                    for req in pending:
+                        st.markdown(f"**{req['user_email']}** · {req['plan']} · {req['payment_method']}")
+                        st.caption(f"Ref: {req['transaction_ref']} | ৳{req['amount_bdt']} / ${req['amount_usd']} | {req['created_at']}")
+                        if st.button("Approve payment", key=f"approve_{req['id']}", type="primary"):
+                            ok, msg = approve_payment_request(req["id"], st.session_state.user_email)
+                            (st.success if ok else st.error)(msg)
+                            st.rerun()
+                except Exception:
+                    st.warning("Run supabase_subscription.sql and check the server-side Supabase key permissions.")
+
     if st.button("Logout", use_container_width=True, type="secondary"):
         st.session_state.logged_in = False
         st.session_state.user_email = ""
@@ -391,6 +565,9 @@ with st.sidebar:
 current_messages = st.session_state.chat_sessions[st.session_state.current_session]
 
 if selected_category == "🎨 Image Generation":
+    if not get_subscription(st.session_state.user_email):
+        st.warning("🎨 Image Generation is a Premium feature. Upgrade from the sidebar to unlock it.")
+        st.stop()
     st.markdown("### 🎨 AI Image Generator")
     img_prompt = st.text_input("Describe your image:")
     if st.button("Generate Image", type="primary") and img_prompt:
@@ -399,6 +576,9 @@ if selected_category == "🎨 Image Generation":
             st.image(image_url, use_container_width=True)
 
 elif selected_category == "📄 File/PDF Analyzer":
+    if not get_subscription(st.session_state.user_email):
+        st.warning("📄 File/PDF analysis is a Premium feature. Upgrade from the sidebar to unlock it.")
+        st.stop()
     st.markdown("### 📄 File Analyzer")
     uploaded_file = st.file_uploader("Upload PDF or Image", type=["pdf", "png", "jpg", "jpeg"])
     file_query = st.text_input("What do you want to know about this file?")
@@ -519,10 +699,19 @@ else:
             st.markdown(m["content"])
 
     with st.expander("🎤 Record Voice / Upload Image"):
-        audio_value = st.audio_input("Speak now")
-        uploaded_image = st.file_uploader("Upload Image", type=["png", "jpg", "jpeg"])
+        if get_subscription(st.session_state.user_email):
+            audio_value = st.audio_input("Speak now")
+            uploaded_image = st.file_uploader("Upload Image", type=["png", "jpg", "jpeg"])
+        else:
+            audio_value = None
+            uploaded_image = None
+            st.caption("Voice input and image understanding are included with Premium.")
 
     if prompt := st.chat_input("Ask ASIKERA anything..."):
+        active_sub_for_chat = get_subscription(st.session_state.user_email)
+        if not active_sub_for_chat and daily_usage(st.session_state.user_email) >= FREE_DAILY_LIMIT:
+            st.warning("You have reached the free daily limit of 10 messages. Upgrade to Premium from the sidebar to continue.")
+            st.stop()
         user_text = prompt
         if audio_value:
             with st.spinner("Transcribing..."):
@@ -530,6 +719,10 @@ else:
                 with open("temp.wav", "rb") as f:
                     user_text = groq_client.audio.transcriptions.create(file=("temp.wav", f.read()), model="whisper-large-v3").text
         
+        if not active_sub_for_chat:
+            if not increment_daily_usage(st.session_state.user_email):
+                st.error("Could not record daily usage. Please check Supabase setup and try again.")
+                st.stop()
         current_messages.append({"role":"user","content":user_text})
         with st.chat_message("user", avatar="👤"):
             st.markdown(user_text)
@@ -538,26 +731,26 @@ else:
             with st.spinner("Thinking..."):
                 if uploaded_image:
                     if not GEMINI_API_KEY:
-                        reply = "Gemini API key is not configured. Add GEMINI_API_KEY to Streamlit Secrets."
+                        reply = "Smart engine is not configured. Add GEMINI_API_KEY to Streamlit Secrets."
                         st.error(reply)
                     else:
                         gemini_model = genai.GenerativeModel(get_secret("GEMINI_MODEL", "gemini-2.5-flash"))
                         response = gemini_model.generate_content([user_text, {"mime_type": uploaded_image.type, "data": uploaded_image.getvalue()}])
-                        reply = response.text or "I couldn't read a response from Gemini. Please try again."
+                        reply = response.text or "I could not get a response from Smart. Please try again."
                         st.markdown(reply)
-                elif chat_provider == "Gemini":
+                elif chat_provider == "Smart":
                     if not GEMINI_API_KEY:
-                        reply = "Gemini API key is not configured. Add GEMINI_API_KEY to Streamlit Secrets."
+                        reply = "Smart engine is not configured. Add GEMINI_API_KEY to Streamlit Secrets."
                         st.error(reply)
                     else:
                         history_text = "\n\n".join(f"{m['role'].upper()}: {m['content']}" for m in current_messages[-10:])
                         gemini_model = genai.GenerativeModel(get_secret("GEMINI_MODEL", "gemini-2.5-flash"), system_instruction=persona_prompt)
                         response = gemini_model.generate_content(history_text + "\n\nASSISTANT:")
-                        reply = response.text or "I couldn't read a response from Gemini. Please try again."
+                        reply = response.text or "I could not get a response from Smart. Please try again."
                         st.markdown(reply)
                 else:
                     if not groq_client:
-                        reply = "Groq API key is not configured. Add GROQ_API_KEY to Streamlit Secrets or select Gemini."
+                        reply = "Fast engine is not configured. Add GROQ_API_KEY to Streamlit Secrets or select Smart."
                         st.error(reply)
                     else:
                         system_msg = {"role": "system", "content": persona_prompt}
