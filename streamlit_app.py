@@ -68,10 +68,7 @@ custom_css = """
 /* ================= চ্যাট ডিজাইন ================= */
 div[data-testid="stChatMessage"] { background-color: transparent; padding: 10px 0; border: none; }
 
-/* === এখানে লেখার কালার ফিক্স করা হয়েছে === */
-div[data-testid="stChatMessage"] .stMarkdown * { 
-    color: #E0E0E0 !important; 
-}
+/* সাধারণ লেখা সাদা করা */
 div[data-testid="stChatMessage"] p, div[data-testid="stChatMessage"] li { 
     color: #E0E0E0 !important; font-size: 14px !important; line-height: 1.6; 
 }
@@ -84,10 +81,32 @@ div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"])
 div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) { margin-right: auto; margin-left: 0; width: 100%; }
 div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) .stMarkdown { background: transparent; padding: 10px 0; display: inline-block; }
 
-/* টেবিল ফিক্স (টেবিলের ভেতরের লেখাও সাদা হবে) */
+/* টেবিল ফিক্স */
 div[data-testid="stChatMessage"] table { display: block !important; overflow-x: auto !important; border-collapse: collapse !important; margin: 10px 0 !important; }
 div[data-testid="stChatMessage"] table th, div[data-testid="stChatMessage"] table td { 
     color: #E0E0E0 !important; border: 1px solid #444 !important; padding: 6px 12px !important; font-size: 13px !important; 
+}
+
+/* ================= কোড ব্লক ফিক্স (মূল সমস্যা এখানে ছিল) ================= */
+/* কোড ব্লকের ব্যাকগ্রাউন্ড ও লেখা ঠিক করা */
+div[data-testid="stChatMessage"] pre {
+    background-color: #111111 !important;
+    border: 1px solid #333 !important;
+    border-radius: 8px !important;
+    padding: 12px !important;
+}
+div[data-testid="stChatMessage"] code {
+    color: #A8FF60 !important; /* কোডের লেখা হালকা সবুজ/সাদা হবে */
+    background-color: transparent !important;
+    font-family: 'Courier New', monospace !important;
+    font-size: 13px !important;
+}
+/* ইনলাইন কোড (যেমন `pip install...`) */
+div[data-testid="stChatMessage"] p code {
+    background-color: #333333 !important;
+    color: #FFD700 !important; /* হলুদাভ রঙ */
+    padding: 2px 6px !important;
+    border-radius: 4px !important;
 }
 
 /* ================= ইনপুট বক্স ফিক্স ================= */
