@@ -139,26 +139,24 @@ with st.sidebar:
     search_query = st.text_input("🔍 Search chats", placeholder="Type to search...")
     st.markdown("---")
     
-    # ৪টি পার্সোনালিটি
-    st.markdown("#### 🎭 AI Personalities")
     persona_choice = st.radio("Choose AI Version", [
-        "🌟 Gemini (Smart & Fast)",
-        "💬 Meta (Friendly & Witty)",
-        "🧠 ChatGPT (Professional)",
-        "🎓 Sir English (Strict Teacher)",
-        "⚙️ Custom Persona"
-    ])
+    "🚀 Nova (Smart & Fast)",
+    "😎 Vibe (Friendly & Witty)",
+    "🧠 Pro (Professional & Detailed)",
+    "🎓 Sir English (Strict Teacher)",
+    "⚙️ Custom Persona"
+])
     
     if persona_choice == "⚙️ Custom Persona":
-        persona_prompt = st.text_area("Custom Instructions:", "You are a helpful AI.")
-    elif persona_choice == "🎓 Sir English (Strict Teacher)":
-        persona_prompt = "You are 'Sir English', a highly professional, strict English teacher. Correct grammar, explain in Bengali, be encouraging but strict."
-    elif persona_choice == "💬 Meta (Friendly & Witty)":
-        persona_prompt = "You are Meta AI. Be friendly, slightly humorous, and use emojis. Keep answers concise and fun."
-    elif persona_choice == "🧠 ChatGPT (Professional)":
-        persona_prompt = "You are a professional, highly intelligent AI assistant like ChatGPT. Provide detailed, structured, and accurate answers."
-    else:
-        persona_prompt = "You are Gemini, an incredibly smart and fast AI. Answer clearly and efficiently."
+    persona_prompt = st.text_area("Custom Instructions:", "You are a helpful AI.")
+elif persona_choice == "🎓 Sir English (Strict Teacher)":
+    persona_prompt = "You are 'Sir English', a highly professional, strict English teacher. Correct grammar, explain in Bengali, be encouraging but strict."
+elif persona_choice == "😎 Vibe (Friendly & Witty)":
+    persona_prompt = "You are Vibe AI. Be friendly, slightly humorous, and use emojis. Keep answers concise and fun."
+elif persona_choice == "🧠 Pro (Professional & Detailed)":
+    persona_prompt = "You are Pro AI, a professional, highly intelligent AI assistant. Provide detailed, structured, and accurate answers."
+else:
+    persona_prompt = "You are Nova, an incredibly smart and fast AI. Answer clearly and efficiently."
 
     st.markdown("---")
     st.markdown("#### 🛠️ Tools")
