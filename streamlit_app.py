@@ -3,161 +3,324 @@ from groq import Groq
 import google.generativeai as genai
 from ddgs import DDGS
 import urllib.parse
-import edge_tts, asyncio, io
+import edge_tts
+import asyncio
+import io
 from langdetect import detect
+import json
 import hashlib
+import pandas as pd
+import plotly.express as px
 from supabase import create_client, Client
 
+# ================= ১. পেজ কনফিগারেশন =================
 st.set_page_config(page_title="Super AI Pro", page_icon="✨", layout="wide", initial_sidebar_state="expanded")
 
-# ========== PRO CSS - ENTRY + MAIN FIXED ==========
-st.markdown("""
+# ================= ২. আল্ট্রা-প্রিমিয়াম CSS (হুবহু স্ক্রিনশটের মতো) =================
+custom_css = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-.stApp { background: #0A0A0A; font-family: 'Inter'; }
-[data-testid="stSidebar"] { background: #111111; border-right: 1px solid #222; }
-#MainMenu, footer {visibility: hidden;}
 
-/* Entry Card */
-.entry-card {
-    background: rgba(22,22,22,0.9); backdrop-filter: blur(20px);
-    border: 1px solid #2A2A2A; border-radius: 24px;
-    padding: 32px; box-shadow: 0 20px 60px rgba(0,0,0,0.6);
-    max-width: 440px; margin: 40px auto;
+/* গ্লোবাল ডার্ক থিম */
+.stApp { background: #0E0E11; font-family: 'Inter', sans-serif; color: #E2E8F0; }
+
+/* সাইডবার (Left Panel) */
+[data-testid="stSidebar"] { 
+    background: #15151A; 
+    border-right: 1px solid #2A2A35; 
+    padding-top: 10px;
 }
-.gradient-btn {
-    background: linear-gradient(135deg, #7C3AED, #3B82F6);
-    color: white; border: 0; height: 48px; border-radius: 12px;
-    font-weight: 700; width: 100%;
+
+/* সাইডবার ওপেন বাটন (মোবাইলে >> আইকন) */
+[data-testid="collapsedControl"] {
+    display: flex !important; visibility: visible !important;
+    color: #FFF !important; background-color: #2A2A35 !important;
+    border-radius: 8px !important; margin: 10px !important;
 }
-.stTextInput input {
-    background: #1A1A1A !important; border: 1px solid #2A2A2A !important;
-    border-radius: 12px !important; color: white !important; height: 48px;
+[data-testid="collapsedControl"] svg { fill: #FFF !important; }
+
+/* New Chat বাটন (গ্রেডিয়েন্ট) */
+.stButton>button[kind="primary"] { 
+    background: linear-gradient(90deg, #6366F1, #A855F7);
+    border-radius: 12px; height: 45px; font-weight: 600; border: 0; color: white;
+    box-shadow: 0 4px 10px rgba(99, 102, 241, 0.3);
 }
-div[data-testid="stChatInput"] { background: #1A1A1A !important; border-radius: 24px !important; border: 1px solid #333 !important; }
+.stButton>button[kind="primary"]:hover { transform: translateY(-2px); }
+
+/* পার্সোনালিটি বাটন (Nova, Orion ইত্যাদি) */
+.stButton>button[kind="secondary"] {
+    background: #1E1E24; border: 1px solid #333; border-radius: 10px; 
+    color: #A0A0B0; padding: 10px; font-size: 14px; transition: 0.3s;
+}
+.stButton>button[kind="secondary"]:hover { background: #2A2A35; color: white; border-color: #6366F1; }
+
+/* চ্যাট ইন্টারফেস */
+div[data-testid="stChatMessage"] { background-color: transparent; padding: 10px 0; border: none; }
+div[data-testid="stChatMessage"] p { color: #E2E8F0 !important; font-size: 15px; line-height: 1.6; }
+
+/* চ্যাট বাবল (ইউজার ডানদিকে, এআই বামদিকে) */
+div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"]) {
+    flex-direction: row-reverse; text-align: right;
+}
+div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"]) .stMarkdown {
+    background: #1E1E24; padding: 12px 18px; border-radius: 20px 20px 5px 20px; display: inline-block;
+}
+div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) .stMarkdown {
+    background: #25252D; padding: 12px 18px; border-radius: 20px 20px 20px 5px; display: inline-block;
+}
+
+/* চ্যাট ইনপুট বক্স (Bottom) */
+div[data-testid="stChatInput"] { 
+    background-color: #15151A !important; 
+    border-radius: 25px !important; 
+    border: 1px solid #333 !important; 
+    padding: 5px;
+}
+div[data-testid="stChatInput"] textarea { color: #E2E8F0 !important; }
+/* সেন্ড বাটন (বেগুনী) */
+div[data-testid="stChatInput"] button { 
+    background: linear-gradient(90deg, #6366F1, #A855F7) !important; 
+    border-radius: 50% !important; 
+}
+div[data-testid="stChatInput"] button svg { fill: white !important; }
+
+/* ছোট লেখা (Footer) */
+.footer-text { text-align: center; color: #666; font-size: 11px; margin-top: 10px; }
+
+/* হাইড ডিফল্ট এলিমেন্ট */
+#MainMenu {visibility: hidden;} footer {visibility: hidden;} header {background-color: transparent !important;}
 </style>
-""", unsafe_allow_html=True)
+"""
+st.markdown(custom_css, unsafe_allow_html=True)
 
-# Backend
+# ================= ৩. API Clients & Supabase =================
 groq_client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 supabase: Client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
 
-def make_hashes(p): return hashlib.sha256(str.encode(p)).hexdigest()
-def create_user(e,p):
-    try: supabase.table("users").insert({"email":e,"password":make_hashes(p)}).execute(); return True
+# ================= ৪. ডেটাবেস ফাংশন =================
+def make_hashes(password): return hashlib.sha256(str.encode(password)).hexdigest()
+def create_user(email, password):
+    try: 
+        supabase.table("users").insert({"email": email, "password": make_hashes(password)}).execute()
+        return True
     except: return False
-def login_user(e,p):
-    r = supabase.table("users").select("password").eq("email",e).execute()
-    return r.data and r.data[0]["password"] == make_hashes(p)
-def save_chat(e,s,m):
+def login_user(email, password):
+    response = supabase.table("users").select("password").eq("email", email).execute()
+    if response.data and response.data[0]["password"] == make_hashes(password): return True
+    return False
+def save_chat(email, session_name, messages):
     try:
-        supabase.table("chats").delete().eq("user_email",e).eq("session_name",s).execute()
-        supabase.table("chats").insert({"user_email":e,"session_name":s,"messages":m}).execute()
+        supabase.table("chats").delete().eq("user_email", email).eq("session_name", session_name).execute()
+        supabase.table("chats").insert({"user_email": email, "session_name": session_name, "messages": messages}).execute()
     except: pass
-def load_chats(e):
-    r = supabase.table("chats").select("session_name, messages").eq("user_email",e).execute()
-    return {row["session_name"]:row["messages"] for row in r.data} if r.data else {"New Chat":[]}
+def load_chats(email):
+    response = supabase.table("chats").select("session_name, messages").eq("user_email", email).execute()
+    sessions = {row["session_name"]: row["messages"] for row in response.data}
+    return sessions if sessions else {"New Chat": []}
 
-def generate_audio(text):
-    try: lang = detect(text); voice = 'bn-BD-NabanitaNeural' if lang=='bn' else 'en-US-AriaNeural'
-    except: voice='en-US-AriaNeural'
-    async def _gen():
-        c=edge_tts.Communicate(text,voice); d=b""
-        async for chunk in c.stream():
-            if chunk["type"]=="audio": d+=chunk["data"]
-        return d
+# ================= ৫. অডিও জেনারেটর =================
+def generate_audio_edge(text, speed="+0%"):
     try:
-        loop=asyncio.new_event_loop(); asyncio.set_event_loop(loop)
-        return io.BytesIO(loop.run_until_complete(_gen()))
+        lang = detect(text)
+        voice = 'bn-BD-NabanitaNeural' if lang == 'bn' else 'en-US-AriaNeural'
+    except: voice = 'en-US-AriaNeural'
+    async def _generate():
+        communicate = edge_tts.Communicate(text, voice, rate=speed)
+        audio_data = b""
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio": audio_data += chunk["data"]
+        return audio_data
+    try:
+        loop = asyncio.new_event_loop(); asyncio.set_event_loop(loop)
+        return io.BytesIO(loop.run_until_complete(_generate()))
     except: return None
 
-if "logged_in" not in st.session_state: st.session_state.logged_in=False
+# ================= ৬. অটো-লগইন =================
+if "logged_in" not in st.session_state: st.session_state.logged_in = False
+if "user_email" not in st.session_state: st.session_state.user_email = ""
 if not st.session_state.logged_in and "email" in st.query_params:
-    st.session_state.logged_in=True; st.session_state.user_email=st.query_params["email"]; st.rerun()
+    st.session_state.logged_in = True
+    st.session_state.user_email = st.query_params["email"]
+    st.rerun()
 
-# ========== ENTRY UI - PRO VERSION ==========
+# ================= ৭. লগইন পেজ =================
 if not st.session_state.logged_in:
-    st.markdown("""
-    <div style="text-align:center; padding-top: 30px;">
-        <div style="font-size:48px;">✨</div>
-        <h1 style="color:white; font-weight:800; margin:10px 0;">Super AI Pro</h1>
-        <p style="color:#7C3AED; font-weight:600; letter-spacing:2px; font-size:12px;">PRO • TRENDING FIRST • POPULAR BRAND</p>
-        <p style="color:#888;">Your Professional AI Companion</p>
+    st.markdown("<h2 style='text-align: center; margin-top: 50px; font-weight:700;'>✨ Super AI Pro</h2>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1,2,1])
+    with col2:
+        tab1, tab2 = st.tabs(["🔐 Login", "📝 Sign Up"])
+        with tab1:
+            l_email = st.text_input("Email", key="l_email")
+            l_pass = st.text_input("Password", type="password", key="l_pass")
+            if st.button("Login", use_container_width=True, type="primary"):
+                if login_user(l_email, l_pass):
+                    st.session_state.logged_in = True
+                    st.session_state.user_email = l_email
+                    st.query_params["email"] = l_email
+                    st.rerun()
+                else: st.error("Invalid credentials")
+        with tab2:
+            s_email = st.text_input("Email", key="s_email")
+            s_pass = st.text_input("Password", type="password", key="s_pass")
+            if st.button("Sign Up", use_container_width=True, type="secondary"):
+                if create_user(s_email, s_pass): st.success("Account created! Please login.")
+                else: st.error("Email already exists.")
+    st.stop()
+
+# ================= ৮. সাইডবার (আপনার স্ক্রিনশটের মতো) =================
+if "chat_sessions" not in st.session_state:
+    st.session_state.chat_sessions = load_chats(st.session_state.user_email)
+if "current_session" not in st.session_state:
+    st.session_state.current_session = list(st.session_state.chat_sessions.keys())[0]
+
+with st.sidebar:
+    # হেডার
+    st.markdown("<h2 style='margin-bottom:0;'>✨ Super AI Pro</h2><p style='color:#888; font-size:10px; letter-spacing:1px; margin-top:0;'>PRO • TRENDING EDITION</p>", unsafe_allow_html=True)
+    
+    # New Chat
+    if st.button("＋ New Chat", use_container_width=True, type="primary"):
+        new_id = f"Chat {len(st.session_state.chat_sessions) + 1}"
+        st.session_state.chat_sessions[new_id] = []
+        st.session_state.current_session = new_id
+        st.rerun()
+        
+    # Search
+    search_query = st.text_input("Search", placeholder="🔍 Search chats...", label_visibility="collapsed")
+    
+    st.markdown("<p style='color:#888; font-size:12px; margin-bottom:5px;'>✨ Choose AI Version</p>", unsafe_allow_html=True)
+    
+    # পার্সোনালিটি (Nova, Orion, Quantum, Atlas)
+    col_p1, col_p2 = st.columns(2)
+    with col_p1:
+        if st.button("Nova (Smart & Fast)", use_container_width=True, type="secondary"): st.session_state.persona = "nova"
+        if st.button("Quantum (Professional)", use_container_width=True, type="secondary"): st.session_state.persona = "quantum"
+    with col_p2:
+        if st.button("Orion (Friendly & Witty)", use_container_width=True, type="secondary"): st.session_state.persona = "orion"
+        if st.button("Atlas (English)", use_container_width=True, type="secondary"): st.session_state.persona = "atlas"
+
+    # ডিফল্ট পার্সোনা
+    if "persona" not in st.session_state: st.session_state.persona = "nova"
+    
+    if st.session_state.persona == "orion":
+        persona_prompt = "You are Orion, friendly and witty. Use emojis."
+    elif st.session_state.persona == "quantum":
+        persona_prompt = "You are Quantum, professional and detailed."
+    elif st.session_state.persona == "atlas":
+        persona_prompt = "You are Atlas, a strict English teacher. Explain in Bengali."
+    else:
+        persona_prompt = "You are Nova, smart and fast. Answer clearly."
+
+    st.divider()
+    
+    # Mode Selector
+    st.markdown("<p style='color:#888; font-size:12px; margin-bottom:5px;'>⚡ Mode</p>", unsafe_allow_html=True)
+    tool = st.selectbox("Mode", ["Chat", "Image Gen", "File Analyzer", "Web Search"], label_visibility="collapsed")
+    
+    st.markdown("<p style='color:#888; font-size:12px; margin-bottom:5px; margin-top:15px;'>💬 Recent</p>", unsafe_allow_html=True)
+    
+    # Recent Chats
+    filtered_sessions = [s for s in st.session_state.chat_sessions.keys() if search_query.lower() in s.lower()]
+    for s in filtered_sessions:
+        if st.button(f"💬 {s}", use_container_width=True, type="secondary"):
+            st.session_state.current_session = s
+            st.rerun()
+            
+    st.divider()
+    
+    # User Profile & Logout
+    st.markdown(f"""
+    <div style='display:flex; align-items:center; background:#1E1E24; padding:10px; border-radius:10px;'>
+        <div style='background:#6366F1; color:white; border-radius:50%; width:30px; height:30px; display:flex; align-items:center; justify-content:center; margin-right:10px;'>👤</div>
+        <div style='font-size:12px; color:#E2E8F0; overflow:hidden; text-overflow:ellipsis;'>{st.session_state.user_email}</div>
     </div>
     """, unsafe_allow_html=True)
     
-    col1,col2,col3 = st.columns([1,1.2,1])
-    with col2:
-        st.markdown('<div class="entry-card">', unsafe_allow_html=True)
-        tab1, tab2 = st.tabs(["🔐 Login", "📝 Sign Up"])
-        with tab1:
-            l_e = st.text_input("Email Address", placeholder="you@example.com", key="l_e")
-            l_p = st.text_input("Password", type="password", placeholder="••••••••", key="l_p")
-            if st.button("Login to Super AI →", use_container_width=True, type="primary"):
-                if login_user(l_e,l_p):
-                    st.session_state.logged_in=True; st.session_state.user_email=l_e
-                    st.query_params["email"]=l_e; st.rerun()
-                else: st.error("Invalid credentials")
-        with tab2:
-            s_e = st.text_input("Email Address", placeholder="you@example.com", key="s_e")
-            s_p = st.text_input("Password", type="password", placeholder="Create password", key="s_p")
-            if st.button("Create Account", use_container_width=True, type="primary"):
-                if create_user(s_e,s_p): st.success("Account created! Now login.")
-                else: st.error("Email already exists")
-        st.markdown("<p style='text-align:center; color:#555; font-size:11px; margin-top:20px;'>© 2026 Super AI Pro • Built by Asikul Islam</p>", unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-    st.stop()
+    st.write("")
+    if st.button("🚪 Logout", use_container_width=True, type="secondary"):
+        st.session_state.logged_in = False
+        st.query_params.clear()
+        st.rerun()
+        
+    st.markdown("<div class='footer-text'>Super AI Pro • Powered by Nova • 1.5</div>", unsafe_allow_html=True)
 
-# ========== SIDEBAR ==========
-if "chat_sessions" not in st.session_state: st.session_state.chat_sessions=load_chats(st.session_state.user_email)
-if "current_session" not in st.session_state: st.session_state.current_session=list(st.session_state.chat_sessions.keys())[0]
+# ================= ৯. মেইন অ্যাপ লজিক =================
+current_messages = st.session_state.chat_sessions[st.session_state.current_session]
 
-with st.sidebar:
-    st.markdown("## ✨ Super AI")
-    if st.button("＋ New Chat", use_container_width=True, type="primary"):
-        nid=f"Chat {len(st.session_state.chat_sessions)+1}"; st.session_state.chat_sessions[nid]=[]; st.session_state.current_session=nid; st.rerun()
-    search=st.text_input("Search", placeholder="🔍 Search chats...", label_visibility="collapsed")
-    st.divider()
-    st.markdown("**🎭 Choose AI Version**")
-    persona = st.radio("", ["🚀 Nova (Smart & Fast)", "😎 Vibe (Friendly)", "🧑‍🏫 Pro (Professional)", "📚 Sir English"], label_visibility="collapsed")
-    if "Sir English" in persona: sys_prompt="You are Sir English, strict English teacher, explain in Bengali"
-    elif "Vibe" in persona: sys_prompt="You are Vibe, friendly, witty, use emojis"
-    elif "Pro" in persona: sys_prompt="You are Pro AI, professional, detailed"
-    else: sys_prompt="You are Nova, smart and fast"
-    st.divider()
-    tool=st.selectbox("🛠️ Tools", ["💬 Chat", "🖼️ Image Gen", "📄 File Analyzer", "🌐 Web Search"])
-    st.divider()
-    st.markdown("**💬 Recent**")
-    for s in [x for x in st.session_state.chat_sessions if search.lower() in x.lower()]:
-        if st.button(f"💬 {s}", key=s, use_container_width=True): st.session_state.current_session=s; st.rerun()
-    st.divider()
-    if st.button("🚪 Logout", use_container_width=True): st.session_state.logged_in=False; st.query_params.clear(); st.rerun()
+# --- চ্যাট মোড ---
+if tool == "Chat":
+    # মেসেজ রেন্ডার (ইউজার ডানদিকে, এআই বামদিকে)
+    for m in current_messages:
+        avatar = "✨" if m["role"] == "assistant" else "👤"
+        with st.chat_message(m["role"], avatar=avatar):
+            st.markdown(m["content"])
 
-# ========== MAIN CHAT - ERROR FIXED ==========
-msgs=st.session_state.chat_sessions[st.session_state.current_session]
-if not msgs: st.markdown(f"<div style='text-align:center; padding:60px;'><h2 style='color:white;'>How can I help you today?</h2><p style='color:#666;'>{persona}</p></div>", unsafe_allow_html=True)
+    # ইনপুট
+    if prompt := st.chat_input("Ask anything..."):
+        current_messages.append({"role":"user","content":prompt})
+        with st.chat_message("user", avatar="👤"):
+            st.markdown(prompt)
+            
+        with st.chat_message("assistant", avatar="✨"):
+            with st.spinner("Thinking..."):
+                system_msg = {"role": "system", "content": persona_prompt}
+                stream = groq_client.chat.completions.create(
+                    model="openai/gpt-oss-120b", 
+                    messages=[system_msg] + current_messages[-10:], 
+                    temperature=0.7, max_tokens=1500, stream=True
+                )
+                reply = st.write_stream(chunk.choices[0].delta.content for chunk in stream if chunk.choices[0].delta.content)
+                
+            current_messages.append({"role":"assistant","content":reply})
+            save_chat(st.session_state.user_email, st.session_state.current_session, current_messages)
+            
+            audio_data = generate_audio_edge(reply)
+            if audio_data: st.audio(audio_data, format="audio/mp3", autoplay=True)
 
-if tool=="💬 Chat":
-    for m in msgs:
-        with st.chat_message(m["role"]): st.markdown(m["content"])
-    if prompt:=st.chat_input("Ask anything..."):
-        msgs.append({"role":"user","content":prompt})
-        with st.chat_message("user"): st.markdown(prompt)
-        with st.chat_message("assistant"):
+# --- ইমেজ জেনারেটর ---
+elif tool == "Image Gen":
+    st.markdown("### 🖼️ AI Image Generator")
+    img_prompt = st.text_input("Describe your image:")
+    if st.button("Generate Image", type="primary"):
+        if img_prompt:
+            with st.spinner("Painting..."):
+                safe_prompt = urllib.parse.quote(img_prompt)
+                image_url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width=1024&height=1024&nologo=true"
+                st.image(image_url, use_container_width=True)
+
+# --- ফাইল এনালাইজার ---
+elif tool == "File Analyzer":
+    st.markdown("### 📄 File Analyzer (PDF/Image)")
+    uploaded_file = st.file_uploader("Upload a PDF or Image to analyze", type=["pdf", "png", "jpg", "jpeg"])
+    file_query = st.text_input("What do you want to know about this file?")
+    
+    if st.button("Analyze File", type="primary") and uploaded_file and file_query:
+        with st.spinner("Analyzing file..."):
             try:
-                # FIXED MODEL - 2 model fallback
-                models_to_try = ["llama-3.1-8b-instant", "gemma2-9b-it", "llama3-8b-8192"]
-                reply=""
-                for model_name in models_to_try:
-                    try:
-                        stream = groq_client.chat.completions.create(model=model_name, messages=[{"role":"system","content":sys_prompt}]+msgs[-8:], stream=True, temperature=0.7)
-                        reply = st.write_stream(c.choices[0].delta.content for c in stream if c.choices[0].delta.content)
-                        break
-                    except: continue
-                if not reply: reply="Sorry, model busy. Try again."
+                gemini_model = genai.GenerativeModel('gemini-1.5-flash')
+                response = gemini_model.generate_content([file_query, {"mime_type": uploaded_file.type, "data": uploaded_file.getvalue()}])
+                st.markdown("### 📝 Analysis Result:")
+                st.markdown(response.text)
             except Exception as e:
-                reply=f"Error: {e}"
-            msgs.append({"role":"assistant","content":reply}); save_chat(st.session_state.user_email, st.session_state.current_session, msgs)
-            audio=generate_audio(reply)
-            if audio: st.audio(audio, format="audio/mp3", autoplay=True)
+                st.error(f"Error: {str(e)}")
+
+# --- ওয়েব সার্চ ---
+elif tool == "Web Search":
+    st.markdown("### 🌐 Live Web Search")
+    search_query = st.text_input("Search the web:")
+    if st.button("Search", type="primary") and search_query:
+        with st.spinner("Searching the live internet..."):
+            try:
+                results = list(DDGS().text(search_query, max_results=4))
+                if results:
+                    context = "\n".join([f"Snippet: {r['body']}" for r in results])
+                    sys_prompt = f"You are a smart AI. Answer accurately based on these search results:\n{context}"
+                    res = groq_client.chat.completions.create(
+                        model="openai/gpt-oss-120b", 
+                        messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": search_query}]
+                    )
+                    st.markdown(res.choices[0].message.content)
+                else:
+                    st.warning("No results found.")
+            except Exception as e:
+                st.error(f"Search Error: {str(e)}")
