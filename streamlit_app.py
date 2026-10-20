@@ -81,14 +81,27 @@ div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"])
 div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) { margin-right: auto; margin-left: 0; width: 100%; }
 div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) .stMarkdown { background: transparent; padding: 10px 0; display: inline-block; }
 
-/* টেবিল ফিক্স */
-div[data-testid="stChatMessage"] table { display: block !important; overflow-x: auto !important; border-collapse: collapse !important; margin: 10px 0 !important; }
+/* ================= টেবিল ফিক্স (মূল সমস্যা এখানে ছিল) ================= */
+div[data-testid="stChatMessage"] table { 
+    display: block !important; 
+    overflow-x: auto !important; 
+    border-collapse: collapse !important; 
+    margin: 15px 0 !important; 
+    width: 100% !important;
+}
 div[data-testid="stChatMessage"] table th, div[data-testid="stChatMessage"] table td { 
-    color: #E0E0E0 !important; border: 1px solid #444 !important; padding: 6px 12px !important; font-size: 13px !important; 
+    color: #FFFFFF !important; /* টেবিলের ভেতরের লেখা জোর করে সাদা করা হলো */
+    border: 1px solid #555 !important; 
+    padding: 10px !important; 
+    font-size: 13px !important; 
+    background-color: #252525 !important; /* টেবিলের ব্যাকগ্রাউন্ড */
+}
+/* টেবিলের ভেতরের যেকোনো লিংক বা ট্যাগের কালার সাদা করা */
+div[data-testid="stChatMessage"] table th *, div[data-testid="stChatMessage"] table td * {
+    color: #FFFFFF !important;
 }
 
-/* ================= কোড ব্লক ফিক্স (মূল সমস্যা এখানে ছিল) ================= */
-/* কোড ব্লকের ব্যাকগ্রাউন্ড ও লেখা ঠিক করা */
+/* ================= কোড ব্লক ফিক্স ================= */
 div[data-testid="stChatMessage"] pre {
     background-color: #111111 !important;
     border: 1px solid #333 !important;
@@ -101,22 +114,19 @@ div[data-testid="stChatMessage"] code {
     font-family: 'Courier New', monospace !important;
     font-size: 13px !important;
 }
-/* ইনলাইন কোড (যেমন `pip install...`) */
 div[data-testid="stChatMessage"] p code {
     background-color: #333333 !important;
-    color: #FFD700 !important; /* হলুদাভ রঙ */
+    color: #FFD700 !important; 
     padding: 2px 6px !important;
     border-radius: 4px !important;
 }
 
 /* ================= ইনপুট বক্স ফিক্স ================= */
-/* সার্চ বক্স (Sidebar) */
 div[data-testid="stTextInput"] input { 
     background-color: #252525 !important; color: #FFFFFF !important; border: 1px solid #444 !important; border-radius: 8px !important;
 }
 div[data-testid="stTextInput"] input::placeholder { color: #888 !important; }
 
-/* নিচের চ্যাট বক্স (Chat Input) */
 div[data-testid="stChatInput"] { background-color: #252525 !important; border-radius: 8px !important; border: 1px solid #444 !important; }
 div[data-testid="stChatInput"] > div { background-color: #252525 !important; }
 div[data-testid="stChatInput"] textarea { color: #FFFFFF !important; background-color: #252525 !important; font-size: 14px !important; }
@@ -124,7 +134,6 @@ div[data-testid="stChatInput"] textarea::placeholder { color: #888 !important; }
 div[data-testid="stChatInput"] button { background: #4D6BFE !important; border-radius: 5px !important; }
 div[data-testid="stChatInput"] button svg { fill: white !important; }
 
-/* সিলেক্ট বক্স ফিক্স */
 div[data-testid="stSelectbox"] div[data-baseweb="select"] > div {
     background-color: #252525 !important; color: #FFF !important; border: 1px solid #444 !important;
 }
