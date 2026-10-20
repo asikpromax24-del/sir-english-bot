@@ -14,10 +14,9 @@ import plotly.express as px
 from supabase import create_client, Client
 
 # ================= ১. পেজ কনফিগারেশন =================
-# এখানে page_icon-এ আপনার লোগোটার ফাইলনেম দিতে পারেন (যেমন: "logo.png")
 st.set_page_config(page_title="ASIKERA AI", page_icon="⚡", layout="wide", initial_sidebar_state="expanded")
 
-# ================= ২. আল্ট্রা-প্রিমিয়াম CSS (ইনপুট ও হেডার ফিক্স) =================
+# ================= ২. আল্ট্রা-প্রিমিয়াম CSS (মোবাইল ও স্ক্রিন সাইজ ফিক্স) =================
 custom_css = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
@@ -25,16 +24,20 @@ custom_css = """
 /* গ্লোবাল ডার্ক থিম */
 .stApp { background: #0E0E11; font-family: 'Inter', sans-serif; color: #E2E8F0; }
 
-/* সাইডবার ডিজাইন */
-[data-testid="stSidebar"] { background: #15151A; border-right: 1px solid #2A2A35; padding-top: 0px !important; }
+/* ================= সাইডবার ছোট করা (যাতে মেইন স্ক্রিন বড় হয়) ================= */
+[data-testid="stSidebar"] { 
+    background: #15151A; 
+    border-right: 1px solid #2A2A35; 
+    width: 280px !important; /* সাইডবারের সাইজ ছোট করা হলো */
+}
 
-/* ================= হেডার এবং Fork বাটন পুরোপুরি হাইড করা ================= */
+/* হেডার এবং Fork বাটন হাইড করা */
 [data-testid="stHeader"] { display: none !important; }
 [data-testid="stToolbar"] { display: none !important; }
 [data-testid="stDecoration"] { display: none !important; }
 #MainMenu {visibility: hidden;} footer {visibility: hidden;} 
 
-/* মোবাইলে সাইডবার ওপেন করার বাটন (>>) দৃশ্যমান রাখা */
+/* মোবাইলে সাইডবার ওপেন বাটন */
 [data-testid="collapsedControl"] {
     display: flex !important; visibility: visible !important;
     color: #FFF !important; background-color: #2A2A35 !important;
@@ -42,52 +45,77 @@ custom_css = """
     position: absolute; top: 10px; left: 10px; z-index: 99999;
 }
 
+/* ================= মেইন কন্টেইনার ফুল স্ক্রিন করা ================= */
+.block-container { 
+    padding-top: 2rem !important; 
+    padding-bottom: 5rem !important; 
+    padding-left: 1rem !important; 
+    padding-right: 1rem !important;
+    max-width: 100% !important; /* মেইন কন্টেইনার ফুল উইডথ */
+}
+
 /* বাটন ডিজাইন */
 .stButton>button[kind="primary"] { background: linear-gradient(90deg, #6366F1, #A855F7); border-radius: 12px; height: 45px; font-weight: 600; border: 0; color: white; box-shadow: 0 4px 10px rgba(99, 102, 241, 0.3); transition: 0.2s; }
-.stButton>button[kind="primary"]:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(99, 102, 241, 0.5); }
-.stButton>button[kind="secondary"] { background: #1E1E24; border: 1px solid #333; border-radius: 10px; color: #A0A0B0; padding: 10px; font-size: 14px; transition: 0.3s; }
+.stButton>button[kind="secondary"] { background: #1E1E24; border: 1px solid #333; border-radius: 10px; color: #A0A0B0; padding: 10px; font-size: 13px; transition: 0.3s; }
 .stButton>button[kind="secondary"]:hover { background: #2A2A35; color: white; border-color: #6366F1; }
 
-/* চ্যাট ডিজাইন */
-div[data-testid="stChatMessage"] { background-color: transparent; padding: 10px 0; border: none; }
-div[data-testid="stChatMessage"] p { color: #E2E8F0 !important; font-size: 15px; line-height: 1.6; }
-div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"]) { flex-direction: row-reverse; text-align: right; margin-left: auto; margin-right: 0; width: fit-content; max-width: 80%; }
-div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"]) .stMarkdown { background: #1E1E24; padding: 12px 18px; border-radius: 20px 20px 5px 20px; display: inline-block; }
-div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) { margin-right: auto; margin-left: 0; width: fit-content; max-width: 85%; }
-div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) .stMarkdown { background: #25252D; padding: 15px 20px; border-radius: 20px 20px 20px 5px; display: inline-block; }
+/* ================= চ্যাট ডিজাইন (লেখা ছোট ও টেবিল ফিক্স) ================= */
+div[data-testid="stChatMessage"] { background-color: transparent; padding: 8px 0; border: none; }
+div[data-testid="stChatMessage"] p, div[data-testid="stChatMessage"] li { color: #E2E8F0 !important; font-size: 14px !important; line-height: 1.5; }
 
-/* ================= চ্যাট ইনপুট বক্স ফিক্স (হুবহু আপনার স্ক্রিনশটের সমস্যার সমাধান) ================= */
+/* ইউজার মেসেজ */
+div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"]) { flex-direction: row-reverse; text-align: right; margin-left: auto; margin-right: 0; width: fit-content; max-width: 85%; }
+div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"]) .stMarkdown { background: #1E1E24; padding: 10px 15px; border-radius: 20px 20px 5px 20px; display: inline-block; }
+
+/* এআই মেসেজ */
+div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) { margin-right: auto; margin-left: 0; width: fit-content; max-width: 95%; }
+div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) .stMarkdown { background: #25252D; padding: 15px; border-radius: 20px 20px 20px 5px; display: inline-block; }
+
+/* ================= টেবিল ভেঙে যাওয়া বন্ধ করা ================= */
+div[data-testid="stChatMessage"] table {
+    display: block !important;
+    overflow-x: auto !important; /* টেবিল বড় হলে স্ক্রল হবে */
+    white-space: nowrap !important;
+    border-collapse: collapse !important;
+    margin: 10px 0 !important;
+}
+div[data-testid="stChatMessage"] th, div[data-testid="stChatMessage"] td { 
+    color: #E2E8F0 !important; 
+    border: 1px solid #444 !important; 
+    padding: 6px 10px !important; 
+    font-size: 13px !important;
+}
+
+/* ================= চ্যাট ইনপুট বক্স ================= */
 div[data-testid="stChatInput"] { 
-    background-color: #15151A !important; /* কালো ব্যাকগ্রাউন্ড */
+    background-color: #15151A !important; 
     border-radius: 25px !important; 
     border: 1px solid #444 !important; 
     padding: 5px;
 }
-div[data-testid="stChatInput"] > div { background-color: #15151A !important; }
 div[data-testid="stChatInput"] textarea { 
-    color: #FFFFFF !important; /* লেখা সাদা */
-    font-size: 16px !important;
-    caret-color: #A855F7 !important; /* কার্সর বেগুনী */
+    color: #FFFFFF !important; 
+    font-size: 15px !important;
 }
-div[data-testid="stChatInput"] textarea::placeholder { color: #888888 !important; } /* প্লেসহোল্ডার ধূসর */
+div[data-testid="stChatInput"] textarea::placeholder { color: #888888 !important; }
 div[data-testid="stChatInput"] button { 
     background: linear-gradient(90deg, #6366F1, #A855F7) !important; 
     border-radius: 50% !important; 
 }
 div[data-testid="stChatInput"] button svg { fill: white !important; }
 
-/* টেক্সট ও হেডার */
+/* সাইডবার টেক্সট */
 .sidebar-header { padding: 20px 10px 10px 10px; }
-.sidebar-title { font-size: 22px; font-weight: 800; color: #FFF; margin: 0; display: flex; align-items: center; gap: 8px; letter-spacing: 1px; }
-.sidebar-subtitle { font-size: 10px; color: #888; letter-spacing: 2px; margin-top: 5px; font-weight: 600; }
+.sidebar-title { font-size: 20px; font-weight: 800; color: #FFF; margin: 0; letter-spacing: 1px; }
+.sidebar-subtitle { font-size: 9px; color: #888; letter-spacing: 1.5px; margin-top: 5px; font-weight: 600; }
 .divider { border-top: 1px solid #1F1F27; margin: 15px 0; }
-.label-text { font-size: 12px; color: #888; margin-bottom: 8px; font-weight: 500; }
+.label-text { font-size: 11px; color: #888; margin-bottom: 8px; font-weight: 500; }
 
 /* ইউজার কার্ড */
-.user-card { display: flex; align-items: center; background: #1E1E24; padding: 10px; border-radius: 10px; border: 1px solid #333; margin-bottom: 10px; }
-.user-avatar { background: #6366F1; color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-size: 14px; margin-right: 10px; }
-.user-email { font-size: 12px; color: #E2E8F0; overflow: hidden; text-overflow: ellipsis; }
-.footer-text { text-align: center; color: #555; font-size: 10px; margin-top: 20px; letter-spacing: 1px; }
+.user-card { display: flex; align-items: center; background: #1E1E24; padding: 8px; border-radius: 8px; border: 1px solid #333; margin-bottom: 10px; }
+.user-avatar { background: #6366F1; color: white; border-radius: 50%; width: 25px; height: 25px; display: flex; align-items: center; justify-content: center; font-size: 12px; margin-right: 8px; }
+.user-email { font-size: 11px; color: #E2E8F0; overflow: hidden; text-overflow: ellipsis; }
+.footer-text { text-align: center; color: #555; font-size: 9px; margin-top: 20px; }
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
