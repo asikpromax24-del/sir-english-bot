@@ -92,13 +92,12 @@ custom_css = f"""
 #MainMenu {{ visibility: hidden !important; }} 
 footer {{ visibility: hidden !important; }} 
 
-/* হেডার ব্যাকগ্রাউন্ড ট্রান্সপারেন্ট রাখা */
 [data-testid="stHeader"] {{ 
     background: transparent !important; 
     z-index: 99999 !important; 
 }}
 
-/* ডানদিকের Share, Star, Fork, GitHub, Edit, Manage App ইত্যাদি সব আইকন হাইড */
+/* ডানদিকের Share, Star, Fork, GitHub, Edit ইত্যাদি সব আইকন হাইড */
 [data-testid="stToolbar"], 
 [data-testid="stDecoration"],
 [data-testid="stHeaderActionElements"],
@@ -109,21 +108,24 @@ button[title*="View fullscreen"] {{
     visibility: hidden !important;
 }}
 
-/* মোবাইলের সাইডবার খোলার মেনু বাটন (>>) উপরে বাম কোণায় ভাসমান রাখা */
+/* ================= মোবাইলের সাইডবার খোলার মেনু বাটন (গ্যারান্টিড ফিক্স) ================= */
 [data-testid="collapsedControl"], 
 [data-testid="stSidebarCollapsedControl"],
-button[kind="header"] {{
+button[kind="header"],
+button[aria-label="Open sidebar"] {{
     display: flex !important; 
     visibility: visible !important;
     color: {text_color} !important; 
-    background-color: {border_color} !important;
+    background-color: {card_bg} !important;
+    border: 1px solid {border_color} !important;
     border-radius: 8px !important; 
     position: fixed !important;
     top: 12px !important; 
     left: 12px !important; 
-    z-index: 999999 !important;
+    z-index: 9999999 !important;
     opacity: 1 !important;
-    padding: 4px !important;
+    padding: 6px !important;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1) !important;
 }}
 
 .block-container {{ padding-top: 3rem !important; padding-bottom: 6rem !important; max-width: 850px !important; margin: 0 auto !important; }}
