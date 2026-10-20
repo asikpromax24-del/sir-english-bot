@@ -25,7 +25,21 @@ custom_css_chat = """
 [data-testid="stHeader"] { display: none !important; }
 #MainMenu {visibility: hidden;} footer {visibility: hidden;} 
 
-.block-container { padding-top: 1rem !important; padding-bottom: 6rem !important; max-width: 850px !important; margin: 0 auto !important; }
+/* মোবাইলে সাইডবার ওপেন করার বাটন (>>) দৃশ্যমান করা */
+[data-testid="collapsedControl"] {
+    display: flex !important; 
+    visibility: visible !important;
+    color: #FFF !important; 
+    background-color: #333 !important;
+    border-radius: 8px !important; 
+    margin: 10px !important;
+    position: absolute; 
+    top: 10px; 
+    left: 10px; 
+    z-index: 99999;
+}
+
+.block-container { padding-top: 2rem !important; padding-bottom: 6rem !important; max-width: 850px !important; margin: 0 auto !important; }
 .stButton>button[kind="primary"] { background: #4D6BFE; border-radius: 8px; height: 35px; font-weight: 500; border: 0; color: white; font-size: 13px; }
 .stButton>button[kind="secondary"] { background: #252525; border: 1px solid #333; border-radius: 8px; color: #AAA; padding: 5px; font-size: 12px; }
 .stButton>button[kind="secondary"]:hover { background: #333; color: white; }
@@ -66,12 +80,11 @@ div[data-testid="stSelectbox"] div[data-baseweb="select"] > div { background-col
 </style>
 """
 
-# ================= ৩. আল্ট্রা-প্রিমিয়াম লগইন CSS (আপনার ১ নম্বর ছবির হুবহু ডিজাইন) =================
+# ================= ৩. লগইন পেজ CSS (ইনপুট বক্স ফিক্সসহ) =================
 custom_css_login = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-/* ১. ব্যাকগ্রাউন্ড গ্লো */
 .stApp { 
     background: radial-gradient(circle at 10% 20%, rgba(139, 92, 246, 0.25), transparent 40%), 
                 radial-gradient(circle at 90% 80%, rgba(59, 130, 246, 0.25), transparent 40%), 
@@ -79,7 +92,6 @@ custom_css_login = """
     font-family: 'Inter', sans-serif; 
 }
 
-/* ২. গ্লাসমরফিজম কার্ড */
 div[data-testid="stForm"] {
     background: rgba(20, 20, 25, 0.6) !important;
     backdrop-filter: blur(16px) !important;
@@ -90,21 +102,20 @@ div[data-testid="stForm"] {
     box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5) !important;
 }
 
-/* ৩. ইনপুট বক্স ফিক্স */
+/* ইনপুট বক্সের ব্যাকগ্রাউন্ড কালো এবং লেখা সাদা করা হলো */
 div[data-testid="stTextInput"] input {
-    background: rgba(255, 255, 255, 0.05) !important;
+    background-color: #1A1A20 !important;
     border: 1px solid rgba(255, 255, 255, 0.1) !important;
     border-radius: 8px !important;
     color: #FFFFFF !important;
     padding-left: 10px !important;
-    transition: border-color 0.3s;
 }
 div[data-testid="stTextInput"] input:focus {
     border-color: #8B5CF6 !important;
     box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2) !important;
 }
 
-/* ৪. লগইন বাটন (জোর করে কালার পরিবর্তন করা হলো) */
+/* লগইন বাটন */
 div[data-testid="stFormSubmitButton"] > button {
     background: linear-gradient(135deg, #8B5CF6, #3B82F6) !important;
     border: none !important;
@@ -120,22 +131,8 @@ div[data-testid="stFormSubmitButton"] > button:hover {
     box-shadow: 0 6px 25px rgba(139, 92, 246, 0.6) !important;
 }
 
-/* গুগল বাটন */
-.stButton > button {
-    background: transparent !important;
-    border: 1px solid rgba(255, 255, 255, 0.2) !important;
-    border-radius: 8px !important;
-    color: white !important;
-}
-.stButton > button:hover { border-color: rgba(255, 255, 255, 0.5) !important; }
-
-/* ট্যাব ডিজাইন (লগইন / সাইন আপ) */
-button[data-baseweb="tab"] {
-    color: #888 !important; font-weight: 500 !important;
-}
-button[data-baseweb="tab"][aria-selected="true"] {
-    color: #FFF !important; border-bottom-color: #8B5CF6 !important;
-}
+button[data-baseweb="tab"] { color: #888 !important; font-weight: 500 !important; }
+button[data-baseweb="tab"][aria-selected="true"] { color: #FFF !important; border-bottom-color: #8B5CF6 !important; }
 
 h1, h2, h3, p, label { color: #FFFFFF !important; }
 #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;} 
@@ -206,7 +203,6 @@ if not st.session_state.logged_in:
         </div>
         """, unsafe_allow_html=True)
         
-        # ট্যাব ফিরিয়ে আনা হলো (Login / Sign Up)
         tab1, tab2 = st.tabs(["Login", "Sign Up"])
         
         with tab1:
@@ -214,8 +210,8 @@ if not st.session_state.logged_in:
                 st.markdown("<h2 style='margin-top:0; font-size: 24px;'>Welcome back</h2>", unsafe_allow_html=True)
                 st.markdown("<p style='font-size: 13px; color: #AAA; margin-bottom: 20px;'>Sign in to your workspace to continue</p>", unsafe_allow_html=True)
                 
-                l_email = st.text_input("Email", placeholder="✉️  you@company.com")
-                l_pass = st.text_input("Password", type="password", placeholder="🔒  ••••••••")
+                l_email = st.text_input("Email", placeholder="you@company.com")
+                l_pass = st.text_input("Password", type="password", placeholder="••••••••")
                 st.checkbox("Remember me")
                 
                 submit_login = st.form_submit_button("Login", use_container_width=True)
@@ -226,30 +222,26 @@ if not st.session_state.logged_in:
                         st.query_params["email"] = l_email
                         st.rerun()
                     else: 
-                        st.error("Invalid email or password. (If new, please Sign Up)")
+                        st.error("Invalid email or password.")
         
         with tab2:
             with st.form("signup_form"):
                 st.markdown("<h2 style='margin-top:0; font-size: 24px;'>Create Account</h2>", unsafe_allow_html=True)
                 st.markdown("<p style='font-size: 13px; color: #AAA; margin-bottom: 20px;'>Join ASIKERA to start creating</p>", unsafe_allow_html=True)
                 
-                s_email = st.text_input("Email", placeholder="✉️  you@company.com", key="s_email")
-                s_pass = st.text_input("Password", type="password", placeholder="🔒  •••••••• (Min 6 chars)", key="s_pass")
+                s_email = st.text_input("Email", placeholder="you@company.com", key="s_email")
+                s_pass = st.text_input("Password", type="password", placeholder="Min 6 characters", key="s_pass")
                 
                 submit_signup = st.form_submit_button("Sign Up", use_container_width=True)
                 if submit_signup:
                     if len(s_pass) < 6:
-                        st.warning("Password must be at least 6 characters long.")
+                        st.warning("Password must be at least 6 characters.")
                     else:
                         if create_user(s_email, s_pass):
                             st.success("Account created! Please switch to Login tab.")
                         else:
-                            st.error("This email is already registered. Please login.")
+                            st.error("Email already registered.")
                             
-        # গুগল বাটন ও ট্রাস্ট ব্যাজ
-        st.markdown("<p style='text-align: center; color: #666; font-size: 12px; margin: 15px 0;'>Or continue with</p>", unsafe_allow_html=True)
-        st.button("G  Continue with Google", use_container_width=True)
-        
         st.markdown("""
         <div style='display: flex; justify-content: space-between; align-items: center; margin-top: 40px; font-size: 11px; color: #888;'>
             <span>🛡️ SOC 2 Compliant</span>
@@ -263,7 +255,7 @@ if not st.session_state.logged_in:
         
     st.stop()
 
-# ================= ৯. মেইন অ্যাপ (লগইন করার পর) =================
+# ================= ৯. মেইন অ্যাপ =================
 st.markdown(custom_css_chat, unsafe_allow_html=True)
 
 if "chat_sessions" not in st.session_state:
@@ -308,11 +300,10 @@ with st.sidebar:
         persona_prompt = "You are a professional editor and writer. Fix grammar, improve tone, and write compelling content."
     elif selected_category == "🎓 English Board (Sir English)":
         persona_prompt = """
-        You are 'Sir English', an elite, highly professional, and strict IELTS Examiner and English Professor (GPT-4 level). 
-        Your goal is to help the user master English with absolute precision.
-        1. If the user makes ANY grammatical, vocabulary, or structural mistake, point it out immediately in a strict but professional tone.
-        2. Provide a 'Correction' section. 3. Provide a 'Detailed Explanation' section in Bengali. 4. Provide an 'Advanced Vocabulary/Phrasing' section.
-        5. Format beautifully using Markdown. 6. Grade paragraphs using IELTS band descriptors.
+        You are 'Sir English', an elite, highly professional, and strict IELTS Examiner and English Professor. 
+        1. Point out ANY grammatical mistake immediately.
+        2. Provide a 'Correction' section. 3. Provide a 'Detailed Explanation' in Bengali. 4. Provide 'Advanced Vocabulary'.
+        5. Grade paragraphs using IELTS band descriptors.
         """
     elif selected_category == "🔍 Deep Research (Agentic)":
         persona_prompt = "You are a deep research agent. You will analyze the user's prompt, generate search queries, and synthesize a detailed report."
