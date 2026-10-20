@@ -17,7 +17,6 @@ from bs4 import BeautifulSoup
 import datetime
 
 # ================= ১. পেজ কনফিগারেশন ও API ক্লায়েন্ট =================
-# initial_sidebar_state="auto" দিলে মোবাইলে মেনু বাটনটা সবসময় দৃশ্যমান থাকে
 st.set_page_config(page_title="ASIKERA AI", page_icon="logo.png", layout="wide", initial_sidebar_state="auto")
 
 groq_client = Groq(api_key=st.secrets["GROQ_API_KEY"])
@@ -92,11 +91,22 @@ custom_css = f"""
 /* ================= হেডার ফিক্স (শুধু বাড়তি বাটন হাইড, মেনু বাটন থাকবে) ================= */
 #MainMenu {{visibility: hidden;}} 
 footer {{visibility: hidden;}} 
-[data-testid="stHeader"] {{ background: transparent !important; z-index: 999999 !important; }}
-[data-testid="stToolbar"] {{ display: none !important; }} /* Share, Fork বাটন হাইড */
-[data-testid="stDecoration"] {{ display: none !important; }}
 
-/* ================= মেনুবার ওপেন বাটন (>>) জোর করে দৃশ্যমান করা ================= */
+/* হেডার ব্যাকগ্রাউন্ড ট্রান্সপারেন্ট করা */
+[data-testid="stHeader"] {{ 
+    background: transparent !important; 
+    z-index: 999999 !important; 
+}}
+
+/* Share, Fork, Edit, Manage App বাটনগুলো সম্পূর্ণ হাইড রাখা */
+[data-testid="stToolbar"], 
+[data-testid="stDecoration"],
+header action-buttons,
+button[title*="View fullscreen"] {{ 
+    display: none !important; 
+}}
+
+/* মোবাইলের সাইডবার ওপেন বাটন (Hamburger / >>) সবসময় দৃশ্যমান রাখা */
 [data-testid="collapsedControl"], 
 [data-testid="stSidebarCollapsedControl"],
 button[kind="header"] {{
