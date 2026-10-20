@@ -68,7 +68,20 @@ custom_css = """
 /* ================= চ্যাট ডিজাইন ================= */
 div[data-testid="stChatMessage"] { background-color: transparent; padding: 10px 0; border: none; }
 
-/* সাধারণ লেখা সাদা করা */
+/* === এখানে হেডলাইন (h1, h2, h3) এবং বোল্ড টেক্সট সাদা করা হলো === */
+div[data-testid="stChatMessage"] h1, 
+div[data-testid="stChatMessage"] h2, 
+div[data-testid="stChatMessage"] h3, 
+div[data-testid="stChatMessage"] h4, 
+div[data-testid="stChatMessage"] h5, 
+div[data-testid="stChatMessage"] h6,
+div[data-testid="stChatMessage"] strong { 
+    color: #FFFFFF !important; /* হেডলাইন সম্পূর্ণ সাদা হবে */
+    margin-top: 15px !important;
+    margin-bottom: 10px !important;
+}
+
+/* সাধারণ লেখা */
 div[data-testid="stChatMessage"] p, div[data-testid="stChatMessage"] li { 
     color: #E0E0E0 !important; font-size: 14px !important; line-height: 1.6; 
 }
@@ -81,7 +94,7 @@ div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"])
 div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) { margin-right: auto; margin-left: 0; width: 100%; }
 div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) .stMarkdown { background: transparent; padding: 10px 0; display: inline-block; }
 
-/* ================= টেবিল ফিক্স (মূল সমস্যা এখানে ছিল) ================= */
+/* ================= টেবিল ফিক্স ================= */
 div[data-testid="stChatMessage"] table { 
     display: block !important; 
     overflow-x: auto !important; 
@@ -90,13 +103,12 @@ div[data-testid="stChatMessage"] table {
     width: 100% !important;
 }
 div[data-testid="stChatMessage"] table th, div[data-testid="stChatMessage"] table td { 
-    color: #FFFFFF !important; /* টেবিলের ভেতরের লেখা জোর করে সাদা করা হলো */
+    color: #FFFFFF !important; 
     border: 1px solid #555 !important; 
     padding: 10px !important; 
     font-size: 13px !important; 
-    background-color: #252525 !important; /* টেবিলের ব্যাকগ্রাউন্ড */
+    background-color: #252525 !important; 
 }
-/* টেবিলের ভেতরের যেকোনো লিংক বা ট্যাগের কালার সাদা করা */
 div[data-testid="stChatMessage"] table th *, div[data-testid="stChatMessage"] table td * {
     color: #FFFFFF !important;
 }
@@ -109,7 +121,7 @@ div[data-testid="stChatMessage"] pre {
     padding: 12px !important;
 }
 div[data-testid="stChatMessage"] code {
-    color: #A8FF60 !important; /* কোডের লেখা হালকা সবুজ/সাদা হবে */
+    color: #A8FF60 !important; 
     background-color: transparent !important;
     font-family: 'Courier New', monospace !important;
     font-size: 13px !important;
