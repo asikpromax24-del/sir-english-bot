@@ -16,20 +16,20 @@ from supabase import create_client, Client
 # ================= ১. পেজ কনফিগারেশন =================
 st.set_page_config(page_title="ASIKERA AI", page_icon="⚡", layout="wide", initial_sidebar_state="expanded")
 
-# ================= ২. আল্ট্রা-প্রিমিয়াম CSS (DeepSeek স্টাইল) =================
+# ================= ২. আল্ট্রা-প্রিমিয়াম CSS (DeepSeek স্টাইল ও ইনপুট ফিক্স) =================
 custom_css = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
 
-/* গ্লোবাল ডার্ক থিম (DeepSeek স্টাইল) */
+/* গ্লোবাল ডার্ক থিম */
 .stApp { background: #1E1E1E; font-family: 'Inter', sans-serif; color: #E0E0E0; }
 
 /* ================= সাইডবার ছোট ও মিনিমাল করা ================= */
 [data-testid="stSidebar"] { 
     background: #191919; 
     border-right: 1px solid #333; 
-    width: 240px !important; /* সাইডবার ছোট করা হলো */
-    min-width: 240px !important;
+    width: 250px !important; 
+    min-width: 250px !important;
 }
 [data-testid="stSidebar"] .stButton>button {
     padding: 5px 10px !important; font-size: 12px !important; height: 32px !important;
@@ -48,11 +48,11 @@ custom_css = """
     border-radius: 5px !important; margin: 10px !important;
 }
 
-/* মেইন কন্টেইনার (DeepSeek স্টাইল সেন্টারড) */
+/* মেইন কন্টেইনার (DeepSeek স্টাইল) */
 .block-container { 
     padding-top: 2rem !important; 
-    padding-bottom: 5rem !important; 
-    max-width: 800px !important; /* লেখা যেন খুব বেশি ছড়িয়ে না যায় */
+    padding-bottom: 6rem !important; 
+    max-width: 800px !important; 
     margin: 0 auto !important;
 }
 
@@ -81,19 +81,36 @@ div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssista
 div[data-testid="stChatMessage"] table { display: block !important; overflow-x: auto !important; border-collapse: collapse !important; margin: 10px 0 !important; }
 div[data-testid="stChatMessage"] th, div[data-testid="stChatMessage"] td { color: #E0E0E0 !important; border: 1px solid #444 !important; padding: 6px 12px !important; font-size: 13px !important; }
 
-/* ================= ইনপুট বক্স (DeepSeek স্টাইল) ================= */
+/* ================= ইনপুট বক্স ফিক্স (সবচেয়ে জরুরি) ================= */
+/* সার্চ বক্স (Sidebar) */
+div[data-testid="stTextInput"] input { 
+    background-color: #252525 !important; 
+    color: #FFFFFF !important; 
+    border: 1px solid #444 !important; 
+    border-radius: 8px !important;
+}
+div[data-testid="stTextInput"] input::placeholder { color: #888 !important; }
+
+/* নিচের চ্যাট বক্স (Chat Input) */
 div[data-testid="stChatInput"] { 
     background-color: #252525 !important; 
     border-radius: 8px !important; 
     border: 1px solid #444 !important; 
-    padding: 0px 10px !important;
-    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: 80%; max-width: 700px;
-    z-index: 999;
 }
-div[data-testid="stChatInput"] textarea { color: #FFF !important; font-size: 14px !important; }
+div[data-testid="stChatInput"] > div { background-color: #252525 !important; }
+div[data-testid="stChatInput"] textarea { 
+    color: #FFFFFF !important; 
+    background-color: #252525 !important;
+    font-size: 14px !important; 
+}
 div[data-testid="stChatInput"] textarea::placeholder { color: #888 !important; }
-div[data-testid="stChatInput"] button { background: #4D6BFE !important; border-radius: 5px !important; padding: 5px !important; }
+div[data-testid="stChatInput"] button { background: #4D6BFE !important; border-radius: 5px !important; }
 div[data-testid="stChatInput"] button svg { fill: white !important; }
+
+/* সিলেক্ট বক্স ফিক্স */
+div[data-testid="stSelectbox"] div[data-baseweb="select"] > div {
+    background-color: #252525 !important; color: #FFF !important; border: 1px solid #444 !important;
+}
 
 /* সাইডবার টেক্সট ও স্পেসিং */
 .sidebar-header { padding: 15px 10px 10px 10px; }
@@ -107,11 +124,6 @@ div[data-testid="stChatInput"] button svg { fill: white !important; }
 .user-avatar { background: #4D6BFE; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 12px; margin-right: 10px; }
 .user-email { font-size: 11px; color: #E0E0E0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .footer-text { text-align: center; color: #555; font-size: 9px; margin-top: 10px; }
-
-/* অন্যান্য ইনপুট বক্স (Search Web) */
-div[data-testid="stTextInput"] input { 
-    background-color: #252525 !important; border: 1px solid #444; color: #FFF !important; border-radius: 8px;
-}
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
@@ -193,7 +205,7 @@ if not st.session_state.logged_in:
                 else: st.error("Email already exists.")
     st.stop()
 
-# ================= ৮. সাইডবার (DeepSeek স্টাইল) =================
+# ================= ৮. সাইডবার =================
 if "chat_sessions" not in st.session_state:
     st.session_state.chat_sessions = load_chats(st.session_state.user_email)
 if "current_session" not in st.session_state:
