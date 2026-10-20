@@ -88,25 +88,28 @@ custom_css = f"""
 .stApp {{ background: {bg_color}; font-family: 'Inter', sans-serif; color: {text_color}; }}
 [data-testid="stSidebar"] {{ background: {sidebar_bg}; border-right: 1px solid {border_color}; width: 280px !important; }}
 
-/* ================= হেডার ফিক্স (শুধু বাড়তি বাটন হাইড, মেনু বাটন ১০০% দৃশ্যমান) ================= */
-#MainMenu {{visibility: hidden;}} 
-footer {{visibility: hidden;}} 
+/* ================= হেডার ও ডানদিকের সব লোগো/বাটন হাইড ================= */
+#MainMenu {{ visibility: hidden !important; }} 
+footer {{ visibility: hidden !important; }} 
 
-/* হেডার ব্যাকগ্রাউন্ড ট্রান্সপারেন্ট করা */
+/* হেডার ব্যাকগ্রাউন্ড ট্রান্সপারেন্ট রাখা */
 [data-testid="stHeader"] {{ 
     background: transparent !important; 
     z-index: 99999 !important; 
 }}
 
-/* Share, Fork, Edit, Manage App বাটনগুলো সম্পূর্ণ হাইড রাখা */
+/* ডানদিকের Share, Star, Fork, GitHub, Edit, Manage App ইত্যাদি সব আইকন হাইড */
 [data-testid="stToolbar"], 
 [data-testid="stDecoration"],
+[data-testid="stHeaderActionElements"],
+header [data-testid="stToolbar"],
 header action-buttons,
 button[title*="View fullscreen"] {{ 
     display: none !important; 
-}
+    visibility: hidden !important;
+}}
 
-/* মোবাইলের সাইডবার ওপেন বাটন (Hamburger / >>) সবসময় দৃশ্যমান ও ফিক্সড রাখা */
+/* মোবাইলের সাইডবার খোলার মেনু বাটন (>>) উপরে বাম কোণায় ভাসমান রাখা */
 [data-testid="collapsedControl"], 
 [data-testid="stSidebarCollapsedControl"],
 button[kind="header"] {{
