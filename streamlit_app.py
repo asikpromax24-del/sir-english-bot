@@ -88,14 +88,14 @@ custom_css = f"""
 .stApp {{ background: {bg_color}; font-family: 'Inter', sans-serif; color: {text_color}; }}
 [data-testid="stSidebar"] {{ background: {sidebar_bg}; border-right: 1px solid {border_color}; width: 280px !important; }}
 
-/* ================= হেডার ফিক্স (শুধু বাড়তি বাটন হাইড, মেনু বাটন থাকবে) ================= */
+/* ================= হেডার ফিক্স (শুধু বাড়তি বাটন হাইড, মেনু বাটন ১০০% দৃশ্যমান) ================= */
 #MainMenu {{visibility: hidden;}} 
 footer {{visibility: hidden;}} 
 
 /* হেডার ব্যাকগ্রাউন্ড ট্রান্সপারেন্ট করা */
 [data-testid="stHeader"] {{ 
     background: transparent !important; 
-    z-index: 999999 !important; 
+    z-index: 99999 !important; 
 }}
 
 /* Share, Fork, Edit, Manage App বাটনগুলো সম্পূর্ণ হাইড রাখা */
@@ -104,9 +104,9 @@ footer {{visibility: hidden;}}
 header action-buttons,
 button[title*="View fullscreen"] {{ 
     display: none !important; 
-}}
+}
 
-/* মোবাইলের সাইডবার ওপেন বাটন (Hamburger / >>) সবসময় দৃশ্যমান রাখা */
+/* মোবাইলের সাইডবার ওপেন বাটন (Hamburger / >>) সবসময় দৃশ্যমান ও ফিক্সড রাখা */
 [data-testid="collapsedControl"], 
 [data-testid="stSidebarCollapsedControl"],
 button[kind="header"] {{
@@ -116,10 +116,11 @@ button[kind="header"] {{
     background-color: {border_color} !important;
     border-radius: 8px !important; 
     position: fixed !important;
-    top: 15px !important; 
-    left: 15px !important; 
-    z-index: 9999999 !important;
+    top: 12px !important; 
+    left: 12px !important; 
+    z-index: 999999 !important;
     opacity: 1 !important;
+    padding: 4px !important;
 }}
 
 .block-container {{ padding-top: 3rem !important; padding-bottom: 6rem !important; max-width: 850px !important; margin: 0 auto !important; }}
