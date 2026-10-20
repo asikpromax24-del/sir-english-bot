@@ -14,15 +14,33 @@ import plotly.express as px
 from supabase import create_client, Client
 
 # ================= ১. পেজ কনফিগারেশন =================
+# এখানে page_icon-এ আপনার লোগোটার ফাইলনেম দিতে পারেন (যেমন: "logo.png")
 st.set_page_config(page_title="ASIKERA AI", page_icon="⚡", layout="wide", initial_sidebar_state="expanded")
 
-# ================= ২. আল্ট্রা-প্রিমিয়াম CSS (ASIKERA ব্র্যান্ডিং) =================
+# ================= ২. আল্ট্রা-প্রিমিয়াম CSS (ইনপুট ও হেডার ফিক্স) =================
 custom_css = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+/* গ্লোবাল ডার্ক থিম */
 .stApp { background: #0E0E11; font-family: 'Inter', sans-serif; color: #E2E8F0; }
+
+/* সাইডবার ডিজাইন */
 [data-testid="stSidebar"] { background: #15151A; border-right: 1px solid #2A2A35; padding-top: 0px !important; }
-[data-testid="collapsedControl"] { display: flex !important; visibility: visible !important; color: #FFF !important; background-color: #2A2A35 !important; border-radius: 8px !important; margin: 10px !important; }
+
+/* ================= হেডার এবং Fork বাটন পুরোপুরি হাইড করা ================= */
+[data-testid="stHeader"] { display: none !important; }
+[data-testid="stToolbar"] { display: none !important; }
+[data-testid="stDecoration"] { display: none !important; }
+#MainMenu {visibility: hidden;} footer {visibility: hidden;} 
+
+/* মোবাইলে সাইডবার ওপেন করার বাটন (>>) দৃশ্যমান রাখা */
+[data-testid="collapsedControl"] {
+    display: flex !important; visibility: visible !important;
+    color: #FFF !important; background-color: #2A2A35 !important;
+    border-radius: 8px !important; margin: 10px !important;
+    position: absolute; top: 10px; left: 10px; z-index: 99999;
+}
 
 /* বাটন ডিজাইন */
 .stButton>button[kind="primary"] { background: linear-gradient(90deg, #6366F1, #A855F7); border-radius: 12px; height: 45px; font-weight: 600; border: 0; color: white; box-shadow: 0 4px 10px rgba(99, 102, 241, 0.3); transition: 0.2s; }
@@ -38,10 +56,24 @@ div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"])
 div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) { margin-right: auto; margin-left: 0; width: fit-content; max-width: 85%; }
 div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) .stMarkdown { background: #25252D; padding: 15px 20px; border-radius: 20px 20px 20px 5px; display: inline-block; }
 
-/* ইনপুট বক্স */
-div[data-testid="stChatInput"] { background-color: #15151A !important; border-radius: 25px !important; border: 1px solid #333 !important; padding: 5px; }
-div[data-testid="stChatInput"] textarea { color: #E2E8F0 !important; }
-div[data-testid="stChatInput"] button { background: linear-gradient(90deg, #6366F1, #A855F7) !important; border-radius: 50% !important; }
+/* ================= চ্যাট ইনপুট বক্স ফিক্স (হুবহু আপনার স্ক্রিনশটের সমস্যার সমাধান) ================= */
+div[data-testid="stChatInput"] { 
+    background-color: #15151A !important; /* কালো ব্যাকগ্রাউন্ড */
+    border-radius: 25px !important; 
+    border: 1px solid #444 !important; 
+    padding: 5px;
+}
+div[data-testid="stChatInput"] > div { background-color: #15151A !important; }
+div[data-testid="stChatInput"] textarea { 
+    color: #FFFFFF !important; /* লেখা সাদা */
+    font-size: 16px !important;
+    caret-color: #A855F7 !important; /* কার্সর বেগুনী */
+}
+div[data-testid="stChatInput"] textarea::placeholder { color: #888888 !important; } /* প্লেসহোল্ডার ধূসর */
+div[data-testid="stChatInput"] button { 
+    background: linear-gradient(90deg, #6366F1, #A855F7) !important; 
+    border-radius: 50% !important; 
+}
 div[data-testid="stChatInput"] button svg { fill: white !important; }
 
 /* টেক্সট ও হেডার */
@@ -56,8 +88,6 @@ div[data-testid="stChatInput"] button svg { fill: white !important; }
 .user-avatar { background: #6366F1; color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-size: 14px; margin-right: 10px; }
 .user-email { font-size: 12px; color: #E2E8F0; overflow: hidden; text-overflow: ellipsis; }
 .footer-text { text-align: center; color: #555; font-size: 10px; margin-top: 20px; letter-spacing: 1px; }
-
-#MainMenu {visibility: hidden;} footer {visibility: hidden;} header {background-color: transparent !important;}
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
@@ -113,7 +143,7 @@ if not st.session_state.logged_in and "email" in st.query_params:
     st.session_state.user_email = st.query_params["email"]
     st.rerun()
 
-# ================= ৭. লগইন পেজ (ASIKERA) =================
+# ================= ৭. লগইন পেজ =================
 if not st.session_state.logged_in:
     st.markdown("<h2 style='text-align: center; margin-top: 50px; font-weight:800; color:white; letter-spacing:2px;'>⚡ ASIKERA</h2>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color:#888; font-size:12px; letter-spacing:1px;'>ASIKUL'S KNOWLEDGE ERA</p>", unsafe_allow_html=True)
@@ -139,7 +169,7 @@ if not st.session_state.logged_in:
                 else: st.error("Email already exists.")
     st.stop()
 
-# ================= ৮. সাইডবার (ASIKERA ব্র্যান্ডিং ও ইংলিশ বোর্ড) =================
+# ================= ৮. সাইডবার =================
 if "chat_sessions" not in st.session_state:
     st.session_state.chat_sessions = load_chats(st.session_state.user_email)
 if "current_session" not in st.session_state:
@@ -149,7 +179,7 @@ with st.sidebar:
     st.markdown("""
     <div class="sidebar-header">
         <div class="sidebar-title">⚡ ASIKERA</div>
-        <div class="sidebar-subtitle">INTELLIGENT • FAST • PRO</div>
+        <div class="sidebar-subtitle">ASIKUL'S KNOWLEDGE ERA</div>
     </div>
     """, unsafe_allow_html=True)
     
@@ -210,7 +240,7 @@ with st.sidebar:
         st.query_params.clear()
         st.rerun()
         
-    st.markdown("<div class='footer-text'>ASIKERA • ASIKUL'S KNOWLEDGE ERA • 1.0</div>", unsafe_allow_html=True)
+    st.markdown("<div class='footer-text'>ASIKERA • 1.0</div>", unsafe_allow_html=True)
 
 # ================= ৯. মেইন অ্যাপ লজিক =================
 current_messages = st.session_state.chat_sessions[st.session_state.current_session]
