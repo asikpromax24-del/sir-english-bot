@@ -314,18 +314,19 @@ def generate_audio_edge(text, voice_type="Female"):
     except: return None
 
 # ================= ৪. থিম সেটিংস (লাইট ও ডার্ক মোড) =================
-if "theme" not in st.session_state: st.session_state.theme = "Light"
+if "theme" not in st.session_state: st.session_state.theme = "Dark"
 
 if st.session_state.theme == "Light":
     bg_color, text_color, sidebar_bg, card_bg = "#F4F6F8", "#1A1A1A", "#FFFFFF", "#FFFFFF"
     border_color, input_bg = "#E5E7EB", "#F9FAFB"
 else:
-    bg_color, text_color, sidebar_bg, card_bg = "#1E1E1E", "#E0E0E0", "#191919", "#25252D"
-    border_color, input_bg = "#333333", "#2A2A2A"
+    bg_color, text_color, sidebar_bg, card_bg = "#0B0D12", "#E6E8EE", "#0F1218", "#141821"
+    border_color, input_bg = "#232834", "#171B24"
 
 custom_css = f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap');
 .stApp {{ background: {bg_color}; font-family: 'Inter', sans-serif; color: {text_color}; }}
 [data-testid="stSidebar"] {{ background: {sidebar_bg}; border-right: 1px solid {border_color}; width: 280px !important; }}
 
@@ -426,6 +427,77 @@ div[data-testid="stSelectbox"] div[data-baseweb="select"] > div {{ background-co
 .user-card {{ display: flex; align-items: center; background: {input_bg}; padding: 10px; border-radius: 10px; border: 1px solid {border_color}; margin-bottom: 10px; }}
 .user-avatar {{ background: #4D6BFE; color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; margin-right: 12px; }}
 .user-email {{ font-size: 12px; color: {text_color}; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+
+/* ================= ASIKERA PRO UI ================= */
+[data-testid="stSidebar"] {{ box-shadow: 4px 0 24px rgba(0,0,0,0.10); }}
+[data-testid="stSidebarUserContent"] {{ padding-top: 1.2rem !important; }}
+.block-container {{ padding-top: 4.2rem !important; }}
+
+/* Text font (English + Bengali). Icons are left alone. */
+.stMarkdown, .stMarkdown p, .stMarkdown li, .stMarkdown td, .stMarkdown th,
+.stMarkdown h1, .stMarkdown h2, .stMarkdown h3, .stMarkdown h4,
+.chat-header, .empty-state, .sidebar-title, .user-email {{ font-family: 'Inter', 'Noto Sans Bengali', sans-serif !important; }}
+.stMarkdown, .stMarkdown p, .stMarkdown li, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3, .stMarkdown h4 {{ color: {text_color} !important; }}
+
+/* Buttons */
+button[kind="primary"], button[data-testid="stBaseButton-primary"] {{
+    background: linear-gradient(135deg, #8B5CF6, #3B82F6) !important; color: #FFFFFF !important;
+    border: 0 !important; border-radius: 12px !important; min-height: 44px; font-weight: 600 !important;
+    box-shadow: 0 6px 18px rgba(99,102,241,0.35) !important; transition: transform .15s, box-shadow .15s;
+}}
+button[kind="primary"]:hover, button[data-testid="stBaseButton-primary"]:hover {{ transform: translateY(-1px); box-shadow: 0 10px 24px rgba(99,102,241,0.45) !important; }}
+button[kind="primary"] *, button[data-testid="stBaseButton-primary"] * {{ color: #FFFFFF !important; }}
+button[kind="secondary"], button[data-testid="stBaseButton-secondary"], [data-testid="stDownloadButton"] button {{
+    background: {input_bg} !important; border: 1px solid {border_color} !important; border-radius: 12px !important;
+    color: {text_color} !important; min-height: 40px; font-weight: 500 !important; justify-content: flex-start; text-align: left;
+    transition: border-color .15s, background .15s;
+}}
+button[kind="secondary"]:hover, button[data-testid="stBaseButton-secondary"]:hover, [data-testid="stDownloadButton"] button:hover {{ border-color: #8B5CF6 !important; }}
+button[kind="secondary"] *, button[data-testid="stBaseButton-secondary"] *, [data-testid="stDownloadButton"] button * {{ color: {text_color} !important; }}
+
+/* Sidebar pieces */
+.label-text {{ letter-spacing: 1.2px; color: #8A93A6 !important; font-size: 11px; }}
+.user-card {{ border-radius: 12px; background: {card_bg}; }}
+.user-avatar {{ background: linear-gradient(135deg, #8B5CF6, #3B82F6); width: 32px; height: 32px; }}
+[data-testid="stSidebar"] h3 {{ font-size: 15px !important; font-weight: 700 !important; margin: 6px 0 !important; color: {text_color} !important; }}
+[data-testid="stSidebar"] label, [data-testid="stSidebar"] [data-testid="stRadio"] p, [data-testid="stSidebar"] [data-testid="stCheckbox"] p {{ color: {text_color} !important; }}
+div[data-baseweb="select"] > div {{ border-radius: 10px !important; }}
+[data-testid="stExpander"] details {{ border: 1px solid {border_color} !important; border-radius: 12px !important; background: {card_bg} !important; }}
+[data-testid="stExpander"] summary p, [data-testid="stExpander"] summary span {{ color: {text_color} !important; }}
+[data-testid="stAlert"] {{ border-radius: 12px !important; background: rgba(99,102,241,0.12) !important; border: 1px solid rgba(99,102,241,0.30) !important; }}
+[data-testid="stAlert"] * {{ color: {text_color} !important; }}
+[data-testid="stFileUploaderDropzone"] {{ background: {input_bg} !important; border: 1px dashed {border_color} !important; border-radius: 12px !important; }}
+[data-testid="stFileUploaderDropzone"] *, [data-testid="stFileUploader"] label * {{ color: {text_color} !important; }}
+
+/* Chat header + empty state */
+.chat-header {{ display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; border: 1px solid {border_color}; background: {card_bg}; border-radius: 16px; margin-bottom: 18px; }}
+.chat-title {{ font-size: 15px; font-weight: 700; color: {text_color}; }}
+.chat-sub {{ font-size: 12px; color: #8A93A6; }}
+.empty-state {{ text-align: center; padding: 44px 12px 28px; }}
+.empty-bolt {{ width: 64px; height: 64px; margin: 0 auto 18px; border-radius: 20px; background: linear-gradient(135deg, #8B5CF6, #3B82F6); display: flex; align-items: center; justify-content: center; font-size: 30px; box-shadow: 0 12px 30px rgba(99,102,241,0.40); }}
+.empty-title {{ font-size: 28px; font-weight: 700; color: {text_color}; line-height: 1.25; }}
+.empty-sub {{ font-size: 14px; color: #8A93A6; margin-top: 10px; }}
+
+/* Chat messages */
+[data-testid="stChatMessageAvatarAssistant"], [data-testid="stChatMessageAvatarUser"] {{ border-radius: 12px !important; overflow: hidden; }}
+[data-testid="stChatMessage"] img {{ border-radius: 12px; }}
+div[data-testid="stChatMessage"] h1 {{ font-size: 22px !important; font-weight: 700 !important; line-height: 1.3 !important; }}
+div[data-testid="stChatMessage"] h2 {{ font-size: 19px !important; font-weight: 700 !important; line-height: 1.3 !important; }}
+div[data-testid="stChatMessage"] h3 {{ font-size: 17px !important; font-weight: 600 !important; line-height: 1.35 !important; }}
+div[data-testid="stChatMessage"] h4 {{ font-size: 15px !important; font-weight: 600 !important; }}
+div[data-testid="stChatMessage"] table {{ font-size: 14px !important; border-radius: 12px; }}
+div[data-testid="stChatMessage"] table th {{ background-color: rgba(139,92,246,0.14) !important; font-weight: 600 !important; }}
+div[data-testid="stChatMessage"] table tr:nth-child(even) td {{ background-color: rgba(127,127,127,0.06) !important; }}
+div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"]) .stMarkdown {{ background: linear-gradient(135deg, #7C5CF6, #4F7CF6) !important; border: 0 !important; }}
+div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"]) .stMarkdown, 
+div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"]) .stMarkdown p {{ color: #FFFFFF !important; }}
+
+/* Chat input (bottom bar) */
+[data-testid="stBottom"], [data-testid="stBottom"] > div {{ background: transparent !important; }}
+[data-testid="stBottom"] {{ background: linear-gradient(to top, {bg_color} 65%, transparent) !important; }}
+div[data-testid="stChatInput"] {{ border-radius: 28px !important; box-shadow: 0 8px 28px rgba(0,0,0,0.14) !important; }}
+div[data-testid="stChatInput"]:focus-within {{ border-color: #8B5CF6 !important; box-shadow: 0 0 0 3px rgba(139,92,246,0.22) !important; }}
+div[data-testid="stChatInput"] button {{ background: linear-gradient(135deg, #8B5CF6, #3B82F6) !important; border-radius: 50% !important; }}
 </style>
 """
 
@@ -448,22 +520,38 @@ if not st.session_state.logged_in:
     st.markdown(custom_css, unsafe_allow_html=True)  # hides Share/Fork/Edit on the login page too
     st.markdown("""
     <style>
-    .stApp { background: radial-gradient(circle at 10% 20%, rgba(139, 92, 246, 0.25), transparent 40%), radial-gradient(circle at 90% 80%, rgba(59, 130, 246, 0.25), transparent 40%), #0B0F17 !important; }
+    .stApp { background: #080B12 !important; }
+    .stApp::before { content: ""; position: fixed; width: 520px; height: 520px; border-radius: 50%; background: #7C3AED; filter: blur(130px); opacity: 0.30; left: -170px; top: -90px; z-index: 0; pointer-events: none; }
+    .stApp::after { content: ""; position: fixed; width: 460px; height: 460px; border-radius: 50%; background: #3B82F6; filter: blur(130px); opacity: 0.26; right: -160px; bottom: -110px; z-index: 0; pointer-events: none; }
     /* One centered column on phone and desktop */
-    .block-container { max-width: 440px !important; margin: 0 auto !important; padding: 2.5rem 1rem 3rem !important; }
-    /* All login text is white */
-    .login-hero, .login-hero * { color: #FFFFFF !important; }
-    .login-hero .login-sub { color: #AEB6C8 !important; }
-    div[data-testid="stForm"] { background: rgba(20, 26, 38, 0.95) !important; border: 1px solid #2A3550 !important; border-radius: 20px !important; padding: 24px !important; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35) !important; }
-    div[data-testid="stForm"], div[data-testid="stForm"] *, div[data-testid="stTabs"] [data-baseweb="tab"] p, div[data-testid="stTabs"] label { color: #FFFFFF !important; }
-    div[data-baseweb="input"], div[data-baseweb="base-input"] { background-color: #1B2332 !important; border-color: #2A3550 !important; }
-    div[data-testid="stTextInput"] input, div[data-baseweb="input"] input { background-color: #1B2332 !important; color: #FFFFFF !important; -webkit-text-fill-color: #FFFFFF !important; caret-color: #FFFFFF !important; border: 1px solid #2A3550 !important; }
-    div[data-testid="stTextInput"] input::placeholder { color: #AEB6C8 !important; -webkit-text-fill-color: #AEB6C8 !important; opacity: 1 !important; }
-    div[data-testid="stForm"] svg { fill: #FFFFFF !important; color: #FFFFFF !important; }
-    div[data-testid="stFormSubmitButton"] > button { background: linear-gradient(135deg, #8B5CF6, #3B82F6) !important; border: none !important; color: #FFFFFF !important; font-weight: 600 !important; min-height: 46px !important; }
+    .block-container { position: relative; z-index: 1; max-width: 440px !important; margin: 0 auto !important; padding: 2.5rem 1rem 3rem !important; }
+    /* Hero */
+    .stMarkdown .login-hero, .stMarkdown .login-hero * { color: #FFFFFF !important; }
+    .stMarkdown .login-hero .login-sub { color: #AEB6C8 !important; }
+    /* Tabs as a segmented control */
+    div[data-testid="stTabs"] [data-baseweb="tab-list"] { gap: 6px; background: rgba(255,255,255,0.05); padding: 5px; border-radius: 14px; border: 1px solid #232B3E; }
+    div[data-testid="stTabs"] [data-baseweb="tab"] { flex: 1; justify-content: center; height: 40px; border-radius: 10px; background: transparent !important; }
+    div[data-testid="stTabs"] [data-baseweb="tab"] p { color: #AEB6C8 !important; font-weight: 600 !important; }
+    div[data-testid="stTabs"] [aria-selected="true"] { background: linear-gradient(135deg, #8B5CF6, #3B82F6) !important; }
+    div[data-testid="stTabs"] [aria-selected="true"] p { color: #FFFFFF !important; }
+    [data-baseweb="tab-highlight"], [data-baseweb="tab-border"] { display: none !important; }
+    /* Form card */
+    div[data-testid="stForm"] { background: rgba(20, 26, 38, 0.92) !important; backdrop-filter: blur(18px); border: 1px solid #2A3550 !important; border-radius: 20px !important; padding: 26px !important; margin-top: 14px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45) !important; }
+    div[data-testid="stForm"], div[data-testid="stForm"] label, div[data-testid="stForm"] p { color: #FFFFFF !important; }
+    div[data-testid="stForm"] .form-title { font-size: 22px; font-weight: 700; color: #FFFFFF !important; margin: 0; }
+    div[data-testid="stForm"] .form-sub { font-size: 13px; color: #AEB6C8 !important; margin: 4px 0 14px; }
+    /* Inputs */
+    div[data-baseweb="input"], div[data-baseweb="base-input"], div[data-baseweb="input"] > div { background-color: #1B2332 !important; border-color: #2A3550 !important; border-radius: 12px !important; }
+    div[data-testid="stTextInput"] input, div[data-baseweb="input"] input { background-color: #1B2332 !important; color: #FFFFFF !important; -webkit-text-fill-color: #FFFFFF !important; caret-color: #FFFFFF !important; border: 0 !important; height: 46px; }
+    div[data-baseweb="input"]:focus-within { border-color: #8B5CF6 !important; box-shadow: 0 0 0 3px rgba(139,92,246,0.25) !important; }
+    div[data-baseweb="input"] button { background: transparent !important; }
+    div[data-testid="stTextInput"] input::placeholder { color: #8791A8 !important; -webkit-text-fill-color: #8791A8 !important; opacity: 1 !important; }
+    div[data-testid="stForm"] svg { fill: #AEB6C8 !important; color: #AEB6C8 !important; }
+    /* Submit button */
+    div[data-testid="stFormSubmitButton"] > button { background: linear-gradient(135deg, #8B5CF6, #3B82F6) !important; border: none !important; color: #FFFFFF !important; font-weight: 600 !important; min-height: 48px !important; border-radius: 12px !important; justify-content: center !important; box-shadow: 0 8px 22px rgba(99,102,241,0.40) !important; }
     div[data-testid="stFormSubmitButton"] > button * { color: #FFFFFF !important; }
-    [data-baseweb="tab-highlight"] { background-color: #8B5CF6 !important; }
-    @media (max-width: 640px) { .block-container { padding-left: 0.9rem !important; padding-right: 0.9rem !important; } div[data-testid="stForm"] { padding: 18px !important; } }
+    .login-foot { text-align: center; color: #6B7488; font-size: 11px; margin-top: 22px; }
+    @media (max-width: 640px) { .block-container { padding-left: 0.9rem !important; padding-right: 0.9rem !important; } div[data-testid="stForm"] { padding: 20px !important; } }
     </style>
     """, unsafe_allow_html=True)
 
@@ -473,6 +561,7 @@ if not st.session_state.logged_in:
         tab1, tab2 = st.tabs(["Sign in", "Create account"])
         with tab1:
             with st.form("login_form"):
+                st.markdown('<div class="form-title">Welcome back</div><div class="form-sub">Sign in to your ASIKERA workspace</div>', unsafe_allow_html=True)
                 l_email = st.text_input("Email", placeholder="you@company.com")
                 l_pass = st.text_input("Password", type="password", placeholder="••••••••")
                 if st.form_submit_button("Login", use_container_width=True):
@@ -490,12 +579,14 @@ if not st.session_state.logged_in:
                     else: st.error("Invalid credentials.")
         with tab2:
             with st.form("signup_form"):
+                st.markdown('<div class="form-title">Create your account</div><div class="form-sub">Start with the free plan in seconds</div>', unsafe_allow_html=True)
                 s_email = st.text_input("Email", placeholder="you@company.com")
                 s_pass = st.text_input("Password", type="password", placeholder="Min 6 characters")
                 if st.form_submit_button("Sign Up", use_container_width=True):
                     if len(s_pass) < 6: st.warning("Password too short.")
                     elif create_user(s_email, s_pass): st.success("Account created! Please login.")
                     else: st.error("Email already registered.")
+        st.markdown('<div class="login-foot">© 2026 ASIKERA AI • Privacy • Terms</div>', unsafe_allow_html=True)
     st.stop()
 
 # ================= ৬. মেইন অ্যাপ লজিক =================
@@ -811,6 +902,11 @@ elif selected_category == "🔗 URL Reader":
 
 else:
     # চ্যাট ইন্টারফেস
+    import html as _html
+    _name = _html.escape(st.session_state.user_email.split("@")[0])
+    st.markdown(f'<div class="chat-header"><div class="chat-title">{_html.escape(selected_category)}</div><div class="chat-sub">ASIKERA · {_html.escape(chat_provider)} engine</div></div>', unsafe_allow_html=True)
+    if not current_messages:
+        st.markdown(f'<div class="empty-state"><div class="empty-bolt">⚡</div><div class="empty-title">How can I help you today, {_name}?</div><div class="empty-sub">Ask anything: learning, writing, coding, research and everyday questions.</div></div>', unsafe_allow_html=True)
     for m in current_messages:
         avatar_ai = "logo.png" if "logo.png" else "✨"
         avatar = avatar_ai if m["role"] == "assistant" else "👤"
