@@ -466,6 +466,25 @@ if not st.session_state.logged_in:
     div[data-testid="stFormSubmitButton"] > button * { color: #FFFFFF !important; }
     [data-baseweb="tab-highlight"] { background-color: #8B5CF6 !important; }
     @media (max-width: 640px) { .block-container { padding-left: 0.9rem !important; padding-right: 0.9rem !important; } div[data-testid="stForm"] { padding: 18px !important; } }
+    st.markdown("""
+<style>
+/* উপরের ডানদিকের Share, star, edit, GitHub, মেনু */
+[data-testid="stToolbar"] {display: none !important;}
+[data-testid="stAppDeployButton"] {display: none !important;}
+[data-testid="stStatusWidget"] {display: none !important;}
+[data-testid="stDecoration"] {display: none !important;}
+#MainMenu {visibility: hidden !important;}
+footer {visibility: hidden !important;}
+
+/* header পুরো লুকাবেন না, নইলে মোবাইলে সাইডবার বোতাম হারিয়ে যায় */
+header[data-testid="stHeader"] {background: transparent !important;}
+[data-testid="stSidebarCollapsedControl"],
+[data-testid="collapsedControl"] {
+    display: flex !important;
+    visibility: visible !important;
+}
+</style>
+""", unsafe_allow_html=True)
     </style>
     """, unsafe_allow_html=True)
 
