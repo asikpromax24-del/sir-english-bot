@@ -340,25 +340,23 @@ footer {{ display: none !important; }}
 }}
 [data-testid="stDecoration"] {{ display: none !important; }}
 
-/* Hide ONLY the right-side actions (Share / Fork / Edit / menu / Deploy). The header itself stays. */
+/* Hide the whole top-right toolbar: Share / star / edit / GitHub / menu.
+   visibility (not display) is used so the sidebar toggle below can still re-appear. */
+[data-testid="stToolbar"] {{
+    visibility: hidden !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}}
 [data-testid="stToolbarActions"],
 [data-testid="stMainMenu"],
 [data-testid="stAppDeployButton"],
+[data-testid="stStatusWidget"],
 .stDeployButton,
-[data-testid="stToolbar"] button[title*="Share"],
-[data-testid="stToolbar"] button[aria-label*="Share"],
-[data-testid="stToolbar"] button[title*="Fork"],
-[data-testid="stToolbar"] button[aria-label*="Fork"],
-[data-testid="stToolbar"] button[title*="Edit"],
-[data-testid="stToolbar"] button[aria-label*="Edit"],
-[data-testid="stToolbar"] button[title*="Manage"],
-[data-testid="stToolbar"] button[aria-label*="Manage"] {{
+.stAppDeployButton,
+div[class*="viewerBadge"],
+div[class*="_profileContainer"] {{
     display: none !important;
     visibility: hidden !important;
-}}
-[data-testid="stToolbar"] {{
-    background: transparent !important;
-    box-shadow: none !important;
 }}
 
 /* Left-side sidebar toggle (>>): always visible, clickable and fixed at top-left */
@@ -466,26 +464,8 @@ if not st.session_state.logged_in:
     div[data-testid="stFormSubmitButton"] > button * { color: #FFFFFF !important; }
     [data-baseweb="tab-highlight"] { background-color: #8B5CF6 !important; }
     @media (max-width: 640px) { .block-container { padding-left: 0.9rem !important; padding-right: 0.9rem !important; } div[data-testid="stForm"] { padding: 18px !important; } }
-    st.markdown("""
-<style>
-/* উপরের ডানদিকের Share, star, edit, GitHub, মেনু */
-[data-testid="stToolbar"] {display: none !important;}
-[data-testid="stAppDeployButton"] {display: none !important;}
-[data-testid="stStatusWidget"] {display: none !important;}
-[data-testid="stDecoration"] {display: none !important;}
-#MainMenu {visibility: hidden !important;}
-footer {visibility: hidden !important;}
-
-/* header পুরো লুকাবেন না, নইলে মোবাইলে সাইডবার বোতাম হারিয়ে যায় */
-header[data-testid="stHeader"] {background: transparent !important;}
-[data-testid="stSidebarCollapsedControl"],
-[data-testid="collapsedControl"] {
-    display: flex !important;
-    visibility: visible !important;
-}
-</style>
-""", unsafe_allow_html=True)
-    </style
+    </style>
+    """, unsafe_allow_html=True)
 
     login_container = st.container()
     with login_container:
