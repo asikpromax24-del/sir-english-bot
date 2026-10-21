@@ -19,10 +19,12 @@ from supabase import create_client, Client
 import requests
 from bs4 import BeautifulSoup
 import datetime
+from streamlit_cookies_manager import EncryptedCookieManager
 
 # ================= ১. পেজ কনফিগারেশন ও API ক্লায়েন্ট =================
 # initial_sidebar_state="auto" দিলে মোবাইলে মেনু বাটনটা সবসময় দৃশ্যমান থাকে
 st.set_page_config(page_title="ASIKERA AI", page_icon="⚡", layout="wide", initial_sidebar_state="auto")
+
 
 def get_secret(name, default=None):
     try:
@@ -30,6 +32,12 @@ def get_secret(name, default=None):
     except Exception:
         value = os.environ.get(name, default)
     return value
+
+# Encrypted browser cookie survives page refreshes. Set a long random COOKIE_PASSWORD in Secrets.
+COOKIE_PASSWORD = get_secret("COOKIE_PASSWORD", "") or get_secret("SUPABASE_KEY", "")
+cookies = EncryptedCookieManager(prefix="asikera/", password=str(COOKIE_PASSWORD)) if COOKIE_PASSWORD else None
+if cookies is not None and not cookies.ready():
+    st.stop()
 
 GROQ_API_KEY = get_secret("GROQ_API_KEY")
 GEMINI_API_KEY = get_secret("GEMINI_API_KEY")
@@ -359,6 +367,16 @@ div[data-testid="stSelectbox"] div[data-baseweb="select"] > div {{ background-co
 # ================= ৫. লগইন পেজ =================
 if "logged_in" not in st.session_state: st.session_state.logged_in = False
 if "user_email" not in st.session_state: st.session_state.user_email = ""
+# Restore only a recently authenticated encrypted cookie (30-day maximum).
+if not st.session_state.logged_in and cookies is not None:
+    try:
+        saved_email = cookies.get("email", "")
+        saved_at = int(cookies.get("authenticated_at", "0") or "0")
+        if saved_email and saved_at and (datetime.datetime.now(datetime.timezone.utc).timestamp() - saved_at) < 30 * 86400:
+            st.session_state.logged_in = True
+            st.session_state.user_email = saved_email.strip().lower()
+    except Exception:
+        pass
 
 if not st.session_state.logged_in:
     if not supabase:
@@ -374,8 +392,8 @@ if not st.session_state.logged_in:
     
     col1, col2, col3 = st.columns([1, 1.2, 1])
     with col2:
-        st.markdown("<h1 style='text-align: center; font-weight: 800;'>⚡ ASIKERA</h1><p style='text-align: center; color: #6B7280; letter-spacing: 2px; font-size: 11px;'>ASIKUL'S KNOWLEDGE ERA</p>", unsafe_allow_html=True)
-        tab1, tab2 = st.tabs(["Login", "Sign Up"])
+        st.markdown("""<div style='text-align:center;padding:10px 0 22px;'><div style='font-size:42px;font-weight:850;letter-spacing:-1px;'>⚡ ASIKERA AI</div><div style='color:#6B7280;letter-spacing:3px;font-size:10px;margin-top:4px;'>ASIKUL'S KNOWLEDGE ERA</div><p style='font-size:15px;margin:18px auto 8px;max-width:520px;'>One workspace for learning, writing, coding, research and everyday questions.</p><div style='display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:14px;'><span style='border:1px solid #D1D5DB;border-radius:20px;padding:6px 10px;font-size:12px;'>✦ AI Chat</span><span style='border:1px solid #D1D5DB;border-radius:20px;padding:6px 10px;font-size:12px;'>📚 Learning tools</span><span style='border:1px solid #D1D5DB;border-radius:20px;padding:6px 10px;font-size:12px;'>🔒 Private account</span></div></div>""", unsafe_allow_html=True)
+        tab1, tab2 = st.tabs(["Sign in", "Create account"])
         with tab1:
             with st.form("login_form"):
                 l_email = st.text_input("Email", placeholder="you@company.com")
@@ -384,6 +402,10 @@ if not st.session_state.logged_in:
                     if login_user(l_email, l_pass):
                         st.session_state.logged_in = True
                         st.session_state.user_email = l_email.strip().lower()
+                        if cookies is not None:
+                            cookies["email"] = st.session_state.user_email
+                            cookies["authenticated_at"] = str(int(datetime.datetime.now(datetime.timezone.utc).timestamp()))
+                            cookies.save()
                         st.rerun()
                     else: st.error("Invalid credentials.")
         with tab2:
@@ -557,6 +579,11 @@ with st.sidebar:
     if st.button("Logout", use_container_width=True, type="secondary"):
         st.session_state.logged_in = False
         st.session_state.user_email = ""
+        if cookies is not None:
+            for cookie_key in ("email", "authenticated_at"):
+                try: del cookies[cookie_key]
+                except KeyError: pass
+            cookies.save()
         st.session_state.pop("chat_sessions", None)
         st.session_state.pop("current_session", None)
         st.rerun()
@@ -698,71 +725,82 @@ else:
         with st.chat_message(m["role"], avatar=avatar):
             st.markdown(m["content"])
 
-    with st.expander("🎤 Record Voice / Upload Image"):
-        if get_subscription(st.session_state.user_email):
-            audio_value = st.audio_input("Speak now")
-            uploaded_image = st.file_uploader("Upload Image", type=["png", "jpg", "jpeg"])
+    active_sub_for_chat = bool(get_subscription(st.session_state.user_email))
+    with st.expander("🎤 Voice & Image (Premium)", expanded=False):
+        if active_sub_for_chat:
+            audio_value = st.audio_input("Record a voice message")
+            uploaded_image = st.file_uploader("Attach an image", type=["png", "jpg", "jpeg"], key="chat_image_upload")
+            st.caption("You can send text, voice, an image, or combine text with an image.")
         else:
             audio_value = None
             uploaded_image = None
-            st.caption("Voice input and image understanding are included with Premium.")
-
-    if prompt := st.chat_input("Ask ASIKERA anything..."):
-        active_sub_for_chat = get_subscription(st.session_state.user_email)
+            st.caption("Voice and image understanding are Premium features. Upgrade in the sidebar to unlock them.")
+    prompt = st.chat_input("Ask ASIKERA anything...")
+    send_attachment = st.button("Send voice / image", type="secondary", disabled=(not active_sub_for_chat or (audio_value is None and uploaded_image is None)))
+    if prompt or send_attachment:
+        active_sub_for_chat = bool(get_subscription(st.session_state.user_email))
+        has_attachment = bool(uploaded_image or audio_value)
         if not active_sub_for_chat and daily_usage(st.session_state.user_email) >= FREE_DAILY_LIMIT:
-            st.warning("You have reached the free daily limit of 10 messages. Upgrade to Premium from the sidebar to continue.")
+            st.warning("You have reached the free daily limit of 10 requests. Upgrade to Premium from the sidebar to continue.")
             st.stop()
-        user_text = prompt
+        if has_attachment and not active_sub_for_chat:
+            st.warning("Voice and image requests require Premium.")
+            st.stop()
+        user_text = (prompt or "").strip()
         if audio_value:
-            with st.spinner("Transcribing..."):
-                with open("temp.wav", "wb") as f: f.write(audio_value.getbuffer())
-                with open("temp.wav", "rb") as f:
-                    user_text = groq_client.audio.transcriptions.create(file=("temp.wav", f.read()), model="whisper-large-v3").text
-        
-        if not active_sub_for_chat:
-            if not increment_daily_usage(st.session_state.user_email):
-                st.error("Could not record daily usage. Please check Supabase setup and try again.")
+            if not groq_client:
+                st.error("Voice transcription needs GROQ_API_KEY in Streamlit Secrets.")
                 st.stop()
-        current_messages.append({"role":"user","content":user_text})
+            with st.spinner("Transcribing voice..."):
+                try:
+                    audio_bytes = audio_value.getvalue()
+                    transcript = groq_client.audio.transcriptions.create(file=("voice.wav", audio_bytes), model="whisper-large-v3").text
+                    user_text = (user_text + "\n\n" + transcript).strip() if user_text else transcript.strip()
+                except Exception as exc:
+                    st.error(f"Voice transcription failed: {exc}")
+                    st.stop()
+        if uploaded_image and not user_text:
+            user_text = "Please describe and analyze this image."
+        if not user_text:
+            st.warning("Write a message or attach a voice recording/image first.")
+            st.stop()
+        current_messages.append({"role":"user","content":user_text + ("\n\n[Image attached]" if uploaded_image else "")})
         with st.chat_message("user", avatar="👤"):
             st.markdown(user_text)
-            
-        with st.chat_message("assistant", avatar="logo.png" if "logo.png" else "✨"):
+            if uploaded_image:
+                st.image(uploaded_image, caption="Attached image", use_container_width=True)
+        with st.chat_message("assistant", avatar="✨"):
             with st.spinner("Thinking..."):
-                if uploaded_image:
-                    if not GEMINI_API_KEY:
-                        reply = "Smart engine is not configured. Add GEMINI_API_KEY to Streamlit Secrets."
-                        st.error(reply)
-                    else:
-                        gemini_model = genai.GenerativeModel(get_secret("GEMINI_MODEL", "gemini-3.8-flash"))
+                try:
+                    if uploaded_image:
+                        if not GEMINI_API_KEY:
+                            raise RuntimeError("Image understanding needs GEMINI_API_KEY in Streamlit Secrets.")
+                        gemini_model = genai.GenerativeModel(get_secret("GEMINI_MODEL", "gemini-2.5-flash"))
                         response = gemini_model.generate_content([user_text, {"mime_type": uploaded_image.type, "data": uploaded_image.getvalue()}])
-                        reply = response.text or "I could not get a response from Smart. Please try again."
+                        reply = response.text or "I couldn't read a response. Please try again."
                         st.markdown(reply)
-                elif chat_provider == "Smart":
-                    if not GEMINI_API_KEY:
-                        reply = "Smart engine is not configured. Add GEMINI_API_KEY to Streamlit Secrets."
-                        st.error(reply)
-                    else:
+                    elif chat_provider == "Smart":
+                        if not GEMINI_API_KEY:
+                            raise RuntimeError("Smart engine is not configured. Add GEMINI_API_KEY to Streamlit Secrets.")
                         history_text = "\n\n".join(f"{m['role'].upper()}: {m['content']}" for m in current_messages[-10:])
-                        gemini_model = genai.GenerativeModel(get_secret("GEMINI_MODEL", "gemini-3.8-flash"), system_instruction=persona_prompt)
+                        gemini_model = genai.GenerativeModel(get_secret("GEMINI_MODEL", "gemini-2.5-flash"), system_instruction=persona_prompt)
                         response = gemini_model.generate_content(history_text + "\n\nASSISTANT:")
-                        reply = response.text or "I could not get a response from Smart. Please try again."
+                        reply = response.text or "I couldn't read a response. Please try again."
                         st.markdown(reply)
-                else:
-                    if not groq_client:
-                        reply = "Fast engine is not configured. Add GROQ_API_KEY to Streamlit Secrets or select Smart."
-                        st.error(reply)
                     else:
+                        if not groq_client:
+                            raise RuntimeError("Fast engine is not configured. Add GROQ_API_KEY in Streamlit Secrets.")
                         system_msg = {"role": "system", "content": persona_prompt}
-                        stream = groq_client.chat.completions.create(
-                            model=get_secret("GROQ_MODEL", "openai/gpt-oss-120b"),
-                            messages=[system_msg] + current_messages[-10:],
-                            temperature=0.7, max_tokens=1500, stream=True
-                        )
+                        stream = groq_client.chat.completions.create(model=get_secret("GROQ_MODEL", "openai/gpt-oss-120b"), messages=[system_msg] + current_messages[-10:], temperature=0.7, max_tokens=1500, stream=True)
                         reply = st.write_stream(chunk.choices[0].delta.content for chunk in stream if chunk.choices[0].delta.content)
-                
+                except Exception as exc:
+                    reply = "Sorry, I couldn't process that request. Please check the AI provider configuration and try again."
+                    st.error(str(exc))
             current_messages.append({"role":"assistant","content":reply})
             save_chat(st.session_state.user_email, st.session_state.current_session, current_messages)
-            
+            # Count every successful request type against the same free daily quota.
+            if not active_sub_for_chat and not reply.startswith("Sorry, I couldn't process"):
+                if not increment_daily_usage(st.session_state.user_email):
+                    st.warning("Your reply was generated, but daily usage could not be saved. Check the Supabase daily_usage table.")
             audio_data = generate_audio_edge(reply, voice_gender)
             if audio_data: st.audio(audio_data, format="audio/mp3", autoplay=True)
