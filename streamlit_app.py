@@ -734,7 +734,7 @@ else:
                         reply = "Smart engine is not configured. Add GEMINI_API_KEY to Streamlit Secrets."
                         st.error(reply)
                     else:
-                        gemini_model = genai.GenerativeModel(get_secret("GEMINI_MODEL", "gemini-2.5-flash"))
+                        gemini_model = genai.GenerativeModel(get_secret("GEMINI_MODEL", "gemini-3.8-flash"))
                         response = gemini_model.generate_content([user_text, {"mime_type": uploaded_image.type, "data": uploaded_image.getvalue()}])
                         reply = response.text or "I could not get a response from Smart. Please try again."
                         st.markdown(reply)
@@ -744,7 +744,7 @@ else:
                         st.error(reply)
                     else:
                         history_text = "\n\n".join(f"{m['role'].upper()}: {m['content']}" for m in current_messages[-10:])
-                        gemini_model = genai.GenerativeModel(get_secret("GEMINI_MODEL", "gemini-2.5-flash"), system_instruction=persona_prompt)
+                        gemini_model = genai.GenerativeModel(get_secret("GEMINI_MODEL", "gemini-3.8-flash"), system_instruction=persona_prompt)
                         response = gemini_model.generate_content(history_text + "\n\nASSISTANT:")
                         reply = response.text or "I could not get a response from Smart. Please try again."
                         st.markdown(reply)
