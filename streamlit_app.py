@@ -485,8 +485,7 @@ header[data-testid="stHeader"] {background: transparent !important;}
 }
 </style>
 """, unsafe_allow_html=True)
-    </style>
-    """, unsafe_allow_html=True)
+    </style
 
     login_container = st.container()
     with login_container:
