@@ -19,7 +19,7 @@ from supabase import create_client, Client
 import requests
 from bs4 import BeautifulSoup
 import datetime
-from streamlit_cookies_manager import EncryptedCookieManager
+import extra_streamlit_components as stx
 
 # ================= ১. পেজ কনফিগারেশন ও API ক্লায়েন্ট =================
 # initial_sidebar_state="auto" দিলে মোবাইলে মেনু বাটনটা সবসময় দৃশ্যমান থাকে
@@ -33,11 +33,11 @@ def get_secret(name, default=None):
         value = os.environ.get(name, default)
     return value
 
-# Encrypted browser cookie survives page refreshes. Set a long random COOKIE_PASSWORD in Secrets.
-COOKIE_PASSWORD = get_secret("COOKIE_PASSWORD", "") or get_secret("SUPABASE_KEY", "")
-cookies = EncryptedCookieManager(prefix="asikera/", password=str(COOKIE_PASSWORD)) if COOKIE_PASSWORD else None
-if cookies is not None and not cookies.ready():
-    st.stop()
+# Browser cookie helps restore login after refresh. Cookie values are not encrypted by this component.
+try:
+    cookies = stx.CookieManager(key="asikera_cookie_manager")
+except Exception:
+    cookies = None
 
 GROQ_API_KEY = get_secret("GROQ_API_KEY")
 GEMINI_API_KEY = get_secret("GEMINI_API_KEY")
@@ -370,8 +370,8 @@ if "user_email" not in st.session_state: st.session_state.user_email = ""
 # Restore only a recently authenticated encrypted cookie (30-day maximum).
 if not st.session_state.logged_in and cookies is not None:
     try:
-        saved_email = cookies.get("email", "")
-        saved_at = int(cookies.get("authenticated_at", "0") or "0")
+        saved_email = cookies.get("asikera_email") or ""
+        saved_at = int(cookies.get("asikera_authenticated_at") or "0" or "0")
         if saved_email and saved_at and (datetime.datetime.now(datetime.timezone.utc).timestamp() - saved_at) < 30 * 86400:
             st.session_state.logged_in = True
             st.session_state.user_email = saved_email.strip().lower()
@@ -403,9 +403,8 @@ if not st.session_state.logged_in:
                         st.session_state.logged_in = True
                         st.session_state.user_email = l_email.strip().lower()
                         if cookies is not None:
-                            cookies["email"] = st.session_state.user_email
-                            cookies["authenticated_at"] = str(int(datetime.datetime.now(datetime.timezone.utc).timestamp()))
-                            cookies.save()
+                            cookies.set("asikera_email", st.session_state.user_email)
+                            cookies.set("asikera_authenticated_at", str(int(datetime.datetime.now(datetime.timezone.utc).timestamp())))
                         st.rerun()
                     else: st.error("Invalid credentials.")
         with tab2:
