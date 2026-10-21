@@ -6,3 +6,4 @@ edge-tts
 langdetect
 extra-streamlit-components
 Pillow
+ddgs
