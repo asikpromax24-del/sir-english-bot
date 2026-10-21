@@ -95,7 +95,6 @@ def submit_payment_request(email, plan, method, transaction_ref, screenshot):
     if not screenshot: return False, "Please upload a payment screenshot."
     
     try:
-        # স্ক্রিনশট Supabase Storage-এ আপলোড
         file_ext = screenshot.name.split('.')[-1]
         file_name = f"{email}_{int(_utc_now().timestamp())}.{file_ext}"
         bucket = supabase.storage.from_("payment_proofs")
@@ -189,9 +188,7 @@ def generate_audio_edge(text, voice_type="Female"):
 # ================= ৪. সেশন ম্যানেজমেন্ট ও কুকি রিস্টোর =================
 if "logged_in" not in st.session_state: st.session_state.logged_in = False
 if "user_email" not in st.session_state: st.session_state.user_email = ""
-if "theme" not in st.session_state: st.session_state.theme = "Light"
 
-# কুকি থেকে লগইন রিস্টোর করা
 if not st.session_state.logged_in:
     try:
         saved_email = cookies.get("asikera_user")
@@ -201,28 +198,49 @@ if not st.session_state.logged_in:
             st.rerun()
     except Exception: pass
 
-# ================= ৫. প্রফেশনাল লগইন পেজ =================
+# ================= ৫. লগইন পেজ (টেক্সট কালার ও ডিজাইন ফিক্স) =================
 if not st.session_state.logged_in:
-    bg_color = "#070709"
     st.markdown(f"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
-    .stApp {{ background: {bg_color}; font-family: 'Inter', sans-serif; }}
+    /* Hide Top Right Toolbar */
+    #MainMenu, footer, [data-testid="stToolbar"], [data-testid="stAppDeployButton"], [data-testid="stDecoration"] {{ display: none !important; }}
+    header[data-testid="stHeader"] {{ background: transparent !important; }}
+    
+    .stApp {{ background: #070709; font-family: 'Inter', sans-serif; }}
     .blob1 {{ position: fixed; width: 400px; height: 400px; background: #7C3AED; filter: blur(100px); opacity: 0.4; top: -100px; left: -100px; z-index: -1; }}
     .blob2 {{ position: fixed; width: 400px; height: 400px; background: #3B82F6; filter: blur(100px); opacity: 0.4; bottom: -100px; right: -100px; z-index: -1; }}
     
-    .login-glass {{
-        background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 24px;
-        padding: 40px; box-shadow: 0 20px 60px rgba(0,0,0,0.6); color: white;
+    /* Glassmorphism Card */
+    div[data-testid="stForm"] {{
+        background: rgba(20, 20, 25, 0.85) !important; backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.1) !important; border-radius: 24px !important;
+        padding: 40px !important; box-shadow: 0 20px 60px rgba(0,0,0,0.6) !important;
     }}
+    
+    /* Force White Text for everything inside form */
+    div[data-testid="stForm"] p, div[data-testid="stForm"] h3, div[data-testid="stForm"] label {{
+        color: #FFFFFF !important;
+    }}
+    
+    /* Tabs */
+    button[data-baseweb="tab"] p {{ color: #A0A0B0 !important; }}
+    button[data-baseweb="tab"][aria-selected="true"] p {{ color: #4D6BFE !important; }}
+    button[data-baseweb="tab"][aria-selected="true"] {{ border-bottom-color: #4D6BFE !important; }}
+    
+    /* Input Boxes */
     div[data-testid="stTextInput"] input {{
-        background: rgba(255,255,255,0.08) !important; border: 1px solid rgba(255,255,255,0.2) !important;
-        border-radius: 10px !important; color: white !important; height: 45px !important;
+        background: rgba(255, 255, 255, 0.05) !important; 
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+        border-radius: 10px !important; 
+        color: #FFFFFF !important; 
+        height: 45px !important;
     }}
+    
+    /* Buttons */
     div[data-testid="stFormSubmitButton"] > button {{
         background: linear-gradient(135deg, #8B5CF6, #3B82F6) !important;
-        border-radius: 10px !important; height: 45px !important; font-weight: 700 !important;
+        border-radius: 10px !important; height: 45px !important; font-weight: 700 !important; color: white !important;
     }}
     </style>
     <div class="blob1"></div><div class="blob2"></div>
@@ -243,11 +261,10 @@ if not st.session_state.logged_in:
         """, unsafe_allow_html=True)
     
     with col2:
-        st.markdown('<div class="login-glass">', unsafe_allow_html=True)
         tab1, tab2 = st.tabs(["Sign In", "Create Account"])
         with tab1:
             with st.form("login_form"):
-                st.markdown("<h3 style='color:white; margin:0;'>Welcome back</h3><p style='color:#999; font-size:13px;'>Sign in to continue</p>", unsafe_allow_html=True)
+                st.markdown("<h3 style='margin:0;'>Welcome back</h3>", unsafe_allow_html=True)
                 l_email = st.text_input("Email", placeholder="you@company.com")
                 l_pass = st.text_input("Password", type="password", placeholder="••••••••")
                 if st.form_submit_button("Sign In", use_container_width=True):
@@ -259,57 +276,58 @@ if not st.session_state.logged_in:
                     else: st.error("Invalid credentials.")
         with tab2:
             with st.form("signup_form"):
-                st.markdown("<h3 style='color:white; margin:0;'>Create Account</h3><p style='color:#999; font-size:13px;'>Join ASIKERA today</p>", unsafe_allow_html=True)
+                st.markdown("<h3 style='margin:0;'>Create Account</h3>", unsafe_allow_html=True)
                 s_email = st.text_input("Email", placeholder="you@company.com")
                 s_pass = st.text_input("Password", type="password", placeholder="Min 6 characters")
                 if st.form_submit_button("Sign Up", use_container_width=True):
                     if len(s_pass) < 6: st.warning("Password too short.")
                     elif create_user(s_email, s_pass): st.success("Account created! Please Sign In.")
                     else: st.error("Email already registered.")
-        st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
 
 # ================= ৬. মেইন অ্যাপ CSS =================
-custom_css = f"""
+custom_css = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-.stApp {{ background: #070709; font-family: 'Inter', sans-serif; color: #E0E0E0; }}
-[data-testid="stSidebar"] {{ background: #0F0F0F; border-right: 1px solid #1E1E1E; width: 280px !important; }}
+.stApp { background: #070709; font-family: 'Inter', sans-serif; color: #E0E0E0; }
+[data-testid="stSidebar"] { background: #0F0F0F; border-right: 1px solid #1E1E1E; width: 280px !important; }
 
-/* Remove Top Toolbar but keep Sidebar Toggle */
-#MainMenu, footer, [data-testid="stToolbar"], [data-testid="stDecoration"], [data-testid="stAppDeployButton"] {{ display: none !important; }}
-[data-testid="stHeader"] {{ background: transparent !important; }}
-[data-testid="collapsedControl"] {{
+/* Hide Top Toolbar */
+#MainMenu, footer, [data-testid="stToolbar"], [data-testid="stAppDeployButton"], [data-testid="stDecoration"] { display: none !important; }
+header[data-testid="stHeader"] { background: transparent !important; }
+
+/* Keep Sidebar Toggle Visible */
+[data-testid="collapsedControl"], [data-testid="stSidebarCollapsedControl"], button[kind="header"] {
     display: flex !important; visibility: visible !important;
     color: #FFF !important; background-color: #1A1A1E !important;
     border-radius: 8px !important; position: fixed !important;
     top: 15px !important; left: 15px !important; z-index: 1000000 !important;
-}}
+}
 
-.block-container {{ padding-top: 3rem !important; padding-bottom: 6rem !important; max-width: 850px !important; margin: 0 auto !important; }}
-.stButton>button[kind="primary"] {{ background: #4D6BFE; border-radius: 10px; height: 40px; font-weight: 600; border: 0; color: white; }}
-.stButton>button[kind="secondary"] {{ background: #1A1A1E; border: 1px solid #2A2A2A; border-radius: 10px; color: #CCC; padding: 5px; }}
+.block-container { padding-top: 3rem !important; padding-bottom: 6rem !important; max-width: 850px !important; margin: 0 auto !important; }
+.stButton>button[kind="primary"] { background: #4D6BFE; border-radius: 10px; height: 40px; font-weight: 600; border: 0; color: white; }
+.stButton>button[kind="secondary"] { background: #1A1A1E; border: 1px solid #2A2A2A; border-radius: 10px; color: #CCC; padding: 5px; }
 
 /* Chat Bubbles */
-div[data-testid="stChatMessage"] {{ background-color: transparent; padding: 10px 0; border: none; }}
-div[data-testid="stChatMessage"] p, div[data-testid="stChatMessage"] li {{ color: #E0E0E0 !important; font-size: 15px !important; }}
-div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"]) {{ flex-direction: row-reverse; text-align: right; margin-left: auto; margin-right: 0; width: fit-content; max-width: 85%; }}
-div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"]) .stMarkdown {{ background: #1A1A1E; border: 1px solid #333; padding: 12px 18px; border-radius: 20px 20px 4px 20px; display: inline-block; }}
-div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) .stMarkdown {{ background: #151518; border: 1px solid #2A2A2A; padding: 12px 18px; border-radius: 20px 20px 20px 4px; display: inline-block; width: 100%; }}
+div[data-testid="stChatMessage"] { background-color: transparent; padding: 10px 0; border: none; }
+div[data-testid="stChatMessage"] p, div[data-testid="stChatMessage"] li { color: #E0E0E0 !important; font-size: 15px !important; }
+div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"]) { flex-direction: row-reverse; text-align: right; margin-left: auto; margin-right: 0; width: fit-content; max-width: 85%; }
+div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"]) .stMarkdown { background: #1A1A1E; border: 1px solid #333; padding: 12px 18px; border-radius: 20px 20px 4px 20px; display: inline-block; }
+div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) .stMarkdown { background: #151518; border: 1px solid #2A2A2A; padding: 12px 18px; border-radius: 20px 20px 20px 4px; display: inline-block; width: 100%; }
 
-/* Input & Select */
-div[data-testid="stTextInput"] input {{ background: #1A1A1E !important; color: white !important; border: 1px solid #333 !important; border-radius: 10px !important; }}
-div[data-testid="stChatInput"] {{ background: #151518 !important; border-radius: 12px !important; border: 1px solid #333 !important; }}
-div[data-testid="stSelectbox"] div[data-baseweb="select"] > div {{ background: #1A1A1E !important; color: white !important; border: 1px solid #333 !important; }}
+/* Inputs */
+div[data-testid="stTextInput"] input { background: #1A1A1E !important; color: white !important; border: 1px solid #333 !important; border-radius: 10px !important; }
+div[data-testid="stChatInput"] { background: #151518 !important; border-radius: 12px !important; border: 1px solid #333 !important; }
+div[data-testid="stSelectbox"] div[data-baseweb="select"] > div { background: #1A1A1E !important; color: white !important; border: 1px solid #333 !important; }
 
 /* Sidebar Text */
-.sidebar-title {{ font-size: 20px; font-weight: 700; color: #FFF; }}
-.sidebar-subtitle {{ font-size: 10px; color: #666; letter-spacing: 1.5px; }}
-.divider {{ border-top: 1px solid #1E1E1E; margin: 15px 0; }}
-.label-text {{ font-size: 12px; color: #888; margin-bottom: 8px; font-weight: 600; text-transform: uppercase; }}
-.user-card {{ display: flex; align-items: center; background: #1A1A1E; padding: 10px; border-radius: 10px; border: 1px solid #333; }}
-.user-avatar {{ background: #4D6BFE; color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; margin-right: 12px; }}
-.user-email {{ font-size: 12px; color: #CCC; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+.sidebar-title { font-size: 20px; font-weight: 700; color: #FFF; }
+.sidebar-subtitle { font-size: 10px; color: #666; letter-spacing: 1.5px; }
+.divider { border-top: 1px solid #1E1E1E; margin: 15px 0; }
+.label-text { font-size: 12px; color: #888; margin-bottom: 8px; font-weight: 600; text-transform: uppercase; }
+.user-card { display: flex; align-items: center; background: #1A1A1E; padding: 10px; border-radius: 10px; border: 1px solid #333; }
+.user-avatar { background: #4D6BFE; color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; margin-right: 12px; }
+.user-email { font-size: 12px; color: #CCC; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
