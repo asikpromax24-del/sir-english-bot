@@ -1,9 +1,12 @@
 streamlit
-supabase
 groq
 google-generativeai
+ddgs
 edge-tts
 langdetect
+pandas
+plotly
+supabase
+requests
+beautifulsoup4
 extra-streamlit-components
-Pillow
-ddgs
