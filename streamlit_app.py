@@ -50,6 +50,25 @@ SUPABASE_KEY = get_secret("SUPABASE_KEY")
 groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
+def gemini_generate(contents, system_instruction=None):
+    """Calls Gemini; if a model is retired (404), automatically tries the next one."""
+    names = []
+    for n in [get_secret("GEMINI_MODEL"), "gemini-3.8-flash", "gemini-flash-latest"]:
+        if n and n not in names:
+            names.append(n)
+    last_err = None
+    for name in names:
+        try:
+            kwargs = {"system_instruction": system_instruction} if system_instruction else {}
+            return genai.GenerativeModel(name, **kwargs).generate_content(contents)
+        except Exception as e:
+            last_err = e
+            msg = str(e).lower()
+            if "404" in msg or "not found" in msg or "no longer available" in msg:
+                continue
+            raise
+    raise last_err
+
 supabase: Client | None = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL and SUPABASE_KEY else None
 
 
@@ -498,6 +517,8 @@ div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"])
 div[data-testid="stChatInput"] {{ border-radius: 28px !important; box-shadow: 0 8px 28px rgba(0,0,0,0.14) !important; }}
 div[data-testid="stChatInput"]:focus-within {{ border-color: #8B5CF6 !important; box-shadow: 0 0 0 3px rgba(139,92,246,0.22) !important; }}
 div[data-testid="stChatInput"] button {{ background: linear-gradient(135deg, #8B5CF6, #3B82F6) !important; border-radius: 50% !important; }}
+div[data-testid="stChatInput"] textarea, div[data-testid="stChatInput"] textarea:focus, div[data-testid="stChatInput"] [data-baseweb="textarea"], div[data-testid="stChatInput"] [data-baseweb="textarea"]:focus-within {{ border-color: transparent !important; outline: none !important; box-shadow: none !important; }}
+[data-testid="stChatMessageAvatarAssistant"], [data-testid="stChatMessageAvatarUser"] {{ background: {card_bg} !important; border: 1px solid {border_color} !important; }}
 </style>
 """
 
@@ -686,6 +707,10 @@ with st.sidebar:
     if st.session_state.chat_sessions[st.session_state.current_session]:
         chat_text = "\n\n".join([f"{m['role'].upper()}: {m['content']}" for m in st.session_state.chat_sessions[st.session_state.current_session]])
         st.download_button("📥 Export Chat (TXT)", data=chat_text, file_name="asikera_chat.txt", use_container_width=True)
+        if st.button("🗑️ Clear this chat", use_container_width=True):
+            st.session_state.chat_sessions[st.session_state.current_session] = []
+            save_chat(st.session_state.user_email, st.session_state.current_session, [])
+            st.rerun()
 
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
     st.markdown('<div class="label-text">Recent</div>', unsafe_allow_html=True)
@@ -797,8 +822,7 @@ elif selected_category == "📄 File/PDF Analyzer":
             try:
                 if not GEMINI_API_KEY:
                     raise RuntimeError("Add GEMINI_API_KEY to Streamlit Secrets.")
-                gemini_model = genai.GenerativeModel(get_secret("GEMINI_MODEL", "gemini-2.5-flash"))
-                response = gemini_model.generate_content([file_query, {"mime_type": uploaded_file.type, "data": uploaded_file.getvalue()}])
+                response = gemini_generate([file_query, {"mime_type": uploaded_file.type, "data": uploaded_file.getvalue()}])
                 st.markdown(response.text)
             except Exception as e: st.error(f"Error: {e}")
 
@@ -903,10 +927,18 @@ elif selected_category == "🔗 URL Reader":
 else:
     # চ্যাট ইন্টারফেস
     import html as _html
-    _name = _html.escape(st.session_state.user_email.split("@")[0])
     st.markdown(f'<div class="chat-header"><div class="chat-title">{_html.escape(selected_category)}</div><div class="chat-sub">ASIKERA · {_html.escape(chat_provider)} engine</div></div>', unsafe_allow_html=True)
+    _empty_slot = st.empty()
     if not current_messages:
-        st.markdown(f'<div class="empty-state"><div class="empty-bolt">⚡</div><div class="empty-title">How can I help you today, {_name}?</div><div class="empty-sub">Ask anything: learning, writing, coding, research and everyday questions.</div></div>', unsafe_allow_html=True)
+        with _empty_slot.container():
+            st.markdown('<div class="empty-state"><div class="empty-bolt">⚡</div><div class="empty-title">How can I help you today?</div><div class="empty-sub">Ask anything: learning, writing, coding, research and everyday questions.</div></div>', unsafe_allow_html=True)
+            _starters = ["📘 Explain quantum physics", "💻 Write a Python script", "✉️ Write a professional email", "🎓 Teach me English"]
+            _c1, _c2 = st.columns(2)
+            for _i, _s in enumerate(_starters):
+                with (_c1 if _i % 2 == 0 else _c2):
+                    if st.button(_s, key=f"starter_{_i}", use_container_width=True):
+                        st.session_state.starter_prompt = _s.split(" ", 1)[1]
+                        st.rerun()
     for m in current_messages:
         avatar_ai = "logo.png" if "logo.png" else "✨"
         avatar = avatar_ai if m["role"] == "assistant" else "👤"
@@ -924,8 +956,11 @@ else:
             uploaded_image = None
             st.caption("Voice and image understanding are Premium features. Upgrade in the sidebar to unlock them.")
     prompt = st.chat_input("Ask ASIKERA anything...")
+    if not prompt and st.session_state.get("starter_prompt"):
+        prompt = st.session_state.pop("starter_prompt")
     send_attachment = st.button("Send voice / image", type="secondary", disabled=(not active_sub_for_chat or (audio_value is None and uploaded_image is None)))
     if prompt or send_attachment:
+        _empty_slot.empty()
         active_sub_for_chat = bool(get_subscription(st.session_state.user_email))
         has_attachment = bool(uploaded_image or audio_value)
         if not active_sub_for_chat and daily_usage(st.session_state.user_email) >= FREE_DAILY_LIMIT:
@@ -963,16 +998,14 @@ else:
                     if uploaded_image:
                         if not GEMINI_API_KEY:
                             raise RuntimeError("Image understanding needs GEMINI_API_KEY in Streamlit Secrets.")
-                        gemini_model = genai.GenerativeModel(get_secret("GEMINI_MODEL", "gemini-2.5-flash"))
-                        response = gemini_model.generate_content([user_text, {"mime_type": uploaded_image.type, "data": uploaded_image.getvalue()}])
+                        response = gemini_generate([user_text, {"mime_type": uploaded_image.type, "data": uploaded_image.getvalue()}])
                         reply = response.text or "I couldn't read a response. Please try again."
                         st.markdown(reply)
                     elif chat_provider == "Smart":
                         if not GEMINI_API_KEY:
                             raise RuntimeError("Smart engine is not configured. Add GEMINI_API_KEY to Streamlit Secrets.")
                         history_text = "\n\n".join(f"{m['role'].upper()}: {m['content']}" for m in current_messages[-10:])
-                        gemini_model = genai.GenerativeModel(get_secret("GEMINI_MODEL", "gemini-2.5-flash"), system_instruction=persona_prompt)
-                        response = gemini_model.generate_content(history_text + "\n\nASSISTANT:")
+                        response = gemini_generate(history_text + "\n\nASSISTANT:", system_instruction=persona_prompt)
                         reply = response.text or "I couldn't read a response. Please try again."
                         st.markdown(reply)
                     else:
